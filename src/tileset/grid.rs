@@ -63,6 +63,20 @@ impl<T> Grid<T> {
     pub fn map<X, FN: Fn(T) -> X>(self, func: FN) -> Grid<X> {
         self.grid.into_iter().map(|x| x.into_iter().map(|x| func(x))).collect()
     }
+
+    pub fn try_from_iter<E, IT, TIT>(iter: TIT) -> Result<Self, (usize, usize, E)>
+    where
+        IT: IntoIterator<Item = Result<T, E>>,
+        TIT: IntoIterator<Item = IT>,
+    {
+        iter.into_iter().enumerate()
+            .map(move |(y, inner)| {
+                inner.into_iter().enumerate().map(|(x, item)| {
+                    item.map_err(|e| (x, y, e))
+                }).collect::<Result<_, _>>()
+            }).collect::<Result<_, _>>()
+            .map(Self::new)
+    }
 }
 
 pub struct GridIter<'a, T> {
@@ -102,6 +116,24 @@ impl<T, IT> FromIterator<IT> for Grid<T>
             .collect())
     }
 }
+//
+// impl<T, E, IT, TIT> TryFrom<TIT> for Grid<T>
+//     where
+//         IT: IntoIterator<Item = Result<T, E>>,
+//         TIT: IntoIterator<Item = IT>,
+// {
+//     type Error = (usize, usize, E);
+//
+//     fn try_from(value: TIT) -> Result<Self, Self::Error> {
+//         value.into_iter().enumerate()
+//             .map(move |(y, inner)| {
+//                 inner.into_iter().enumerate().map(|(x, item)| {
+//                     item.map_err(|e| (x, y, e))
+//                 }).collect::<Result<_, _>>()
+//             }).collect::<Result<_, _>>()
+//             .map(Self::new)
+//     }
+// }
 
 // impl <T, IT, E> FromIterator<T> for Result<Grid<T>, E>
 //     where

@@ -106,13 +106,11 @@ impl TryFrom<&DynamicImage> for Grid<Tile> {
     type Error = TileImageUnknownPixel;
 
     fn try_from(value: &DynamicImage) -> Result<Self, Self::Error> {
-        (0..value.height()).map(move |y| {
+        Grid::try_from_iter((0..value.height()).map(move |y| {
             (0..value.width()).map(move |x| {
                 Tile::try_from(value.get_pixel(x, y))
                     .map_err(|p| TileImageUnknownPixel::new(x, y, p.0))
-            }).collect::<Result<Vec<_>, _>>()
-        })
-            .collect::<Result<Vec<_>, _>>()
-            .map(Grid::new)
+            })
+        })).map_err(|(_, _, e)| e)
     }
 }
