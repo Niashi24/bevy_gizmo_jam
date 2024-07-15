@@ -8,6 +8,7 @@ impl Plugin for StatesPlugin {
         app.init_state::<AppState>()
             .add_computed_state::<InGame>()
             .add_computed_state::<Paused>()
+            .add_sub_state::<GamePhase>()
             .enable_state_scoped_entities::<AppState>()
             .enable_state_scoped_entities::<InGame>()
             .enable_state_scoped_entities::<Paused>();
@@ -48,17 +49,8 @@ impl ComputedStates for InGame {
     }
 }
 
-// pub fn paused(app_state: Res<State<AppState>>) -> bool {
-//     match app_state.get() {
-//         AppState::Game(GameInfo { paused }) => *paused,
-//         _ => true,
-//     }
-// }
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Paused(pub bool);
-
-
 
 impl ComputedStates for Paused {
     type SourceStates = AppState;
@@ -69,4 +61,13 @@ impl ComputedStates for Paused {
             _ => None,
         }
     }
+}
+
+#[derive(SubStates, Clone, Eq, PartialEq, Hash, Debug, Default)]
+#[source(InGame = InGame)]
+pub enum GamePhase {
+    #[default]
+    Setup,
+    InGame,
+    Completed
 }

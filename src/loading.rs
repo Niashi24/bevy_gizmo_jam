@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use bevy_kira_audio::AudioSource;
 use crate::state::AppState;
+use crate::tileset::load::TileGridAsset;
 
 pub struct LoadingPlugin;
 
@@ -14,7 +15,8 @@ impl Plugin for LoadingPlugin {
             LoadingState::new(AppState::Loading)
                 .continue_to_state(AppState::Menu)
                 .load_collection::<AudioAssets>()
-                .load_collection::<TextureAssets>(),
+                .load_collection::<TextureAssets>()
+                .load_collection::<Levels>(),
         );
     }
 }
@@ -36,4 +38,10 @@ pub struct TextureAssets {
     pub github: Handle<Image>,
     #[asset(path = "textures/char_temp.png")]
     pub player: Handle<Image>,
+}
+
+#[derive(AssetCollection, Resource)]
+pub struct Levels {
+    #[asset(path = "levels/test_level.png")]
+    pub test_level: Handle<TileGridAsset>,
 }
