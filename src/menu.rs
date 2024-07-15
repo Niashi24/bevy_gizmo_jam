@@ -1,6 +1,7 @@
 use crate::loading::TextureAssets;
-use crate::GameState;
+use crate::AppState;
 use bevy::prelude::*;
+use crate::state::GameInfo;
 
 pub struct MenuPlugin;
 
@@ -8,9 +9,8 @@ pub struct MenuPlugin;
 /// The menu is only drawn during the State `GameState::Menu` and is removed when that state is exited
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Menu), setup_menu)
-            .add_systems(Update, click_play_button.run_if(in_state(GameState::Menu)))
-            .add_systems(OnExit(GameState::Menu), cleanup_menu);
+        app.add_systems(OnEnter(AppState::Menu), setup_menu)
+            .add_systems(Update, click_play_button.run_if(in_state(AppState::Menu)));
     }
 }
 
@@ -29,14 +29,15 @@ impl Default for ButtonColors {
     }
 }
 
-#[derive(Component)]
-struct Menu;
-
 fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
     info!("menu");
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn((
+        StateScoped(AppState::Menu),
+        Camera2dBundle::default()
+    ));
     commands
         .spawn((
+            StateScoped(AppState::Menu),
             NodeBundle {
                 style: Style {
                     width: Val::Percent(100.0),
@@ -48,7 +49,6 @@ fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
                 },
                 ..default()
             },
-            Menu,
         ))
         .with_children(|children| {
             let button_colors = ButtonColors::default();
@@ -66,7 +66,10 @@ fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
                         ..Default::default()
                     },
                     button_colors,
-                    ChangeState(GameState::Playing),
+                    ChangeState(AppState::Game(GameInfo {
+                        level: 0,
+                        paused: false,
+                    })),
                 ))
                 .with_children(|parent| {
                     parent.spawn(TextBundle::from_section(
@@ -81,6 +84,7 @@ fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
         });
     commands
         .spawn((
+            StateScoped(AppState::Menu),
             NodeBundle {
                 style: Style {
                     flex_direction: FlexDirection::Row,
@@ -93,7 +97,6 @@ fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
                 },
                 ..default()
             },
-            Menu,
         ))
         .with_children(|children| {
             children
@@ -176,13 +179,13 @@ fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
 }
 
 #[derive(Component)]
-struct ChangeState(GameState);
+struct ChangeState(AppState);
 
 #[derive(Component)]
 struct OpenLink(&'static str);
 
 fn click_play_button(
-    mut next_state: ResMut<NextState<GameState>>,
+    mut next_state: ResMut<NextState<AppState>>,
     mut interaction_query: Query<
         (
             &Interaction,
@@ -212,11 +215,5 @@ fn click_play_button(
                 *color = button_colors.normal.into();
             }
         }
-    }
-}
-
-fn cleanup_menu(mut commands: Commands, menu: Query<Entity, With<Menu>>) {
-    for entity in menu.iter() {
-        commands.entity(entity).despawn_recursive();
     }
 }

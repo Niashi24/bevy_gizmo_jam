@@ -1,7 +1,7 @@
-use crate::GameState;
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use bevy_kira_audio::AudioSource;
+use crate::state::AppState;
 
 pub struct LoadingPlugin;
 
@@ -11,8 +11,8 @@ pub struct LoadingPlugin;
 impl Plugin for LoadingPlugin {
     fn build(&self, app: &mut App) {
         app.add_loading_state(
-            LoadingState::new(GameState::Loading)
-                .continue_to_state(GameState::Menu)
+            LoadingState::new(AppState::Loading)
+                .continue_to_state(AppState::Menu)
                 .load_collection::<AudioAssets>()
                 .load_collection::<TextureAssets>(),
         );
@@ -34,4 +34,6 @@ pub struct TextureAssets {
     pub bevy: Handle<Image>,
     #[asset(path = "textures/github.png")]
     pub github: Handle<Image>,
+    #[asset(path = "textures/char_temp.png")]
+    pub player: Handle<Image>,
 }
