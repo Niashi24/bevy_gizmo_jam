@@ -83,13 +83,21 @@ fn spawn_player_and_camera(
         bottom_right.x += grid.0.w as f32 * settings.tile_size;
         bottom_right.y -= grid.0.h as f32 * settings.tile_size;
         
-        pos.z += 10.0;
+        let mut center = grid_anchor;
+        
+        center.x += grid.0.w as f32 * settings.tile_size / 2.0;
+        center.y -= grid.0.h as f32 * settings.tile_size / 2.0;
+        center.z += 10.0;
         
         commands.spawn((
             Name::new("Camera"),
             StateScoped(InGame),
             Camera2dBundle {
-                transform: Transform::from_translation(pos),
+                transform: Transform::from_translation(center),
+                projection: OrthographicProjection {
+                    scaling_mode: ScalingMode::FixedVertical(240.0),
+                    ..default()
+                },
                 ..default()
             },
             CameraRegion2d(Rect::from_corners(grid_anchor.xy(), bottom_right)),

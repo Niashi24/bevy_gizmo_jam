@@ -7,7 +7,10 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        
+        app
+            .register_type::<CameraRegion2d>()
+            .register_type::<CameraTarget>()
+            .add_systems(Update, follow_target);
     }
 }
 
@@ -31,23 +34,22 @@ pub fn follow_target(
             continue;
         };
         
-        transform.translation = nudge(
-            transform.translation,
-            target.translation(),
+        let mut target_pos = nudge(
+            transform.translation.xy(),
+            target.translation().xy(),
             8.0,
             time.delta_seconds(),
         );
+        
+        if let Some(&CameraRegion2d(region)) = region {
+            target_pos.x = target_pos.x.clamp(region.min.x, region.max.x);
+            target_pos.y = target_pos.y.clamp(region.min.y, region.max.y);
+        }
+        
+        transform.translation = target_pos.extend(transform.translation.z);
     }
 }
 
-// pub fn spawn_camera(
-//     mut commands: Commands,
-//     player: Query<Entity, With<Player>>,
-//     grid: Query<&Handle<TileGridAsset>>,
-//     grid_assets: Res<Assets<TileGridAsset>>,
-// ) {
-//     
-// }
 pub fn nudge<N, F>(a: N, b: N, decay: F, delta: F) -> N
 where
     N: Mul<F, Output=N> + Add<N, Output=N> + Sub<N, Output=N> + Copy,

@@ -20,6 +20,7 @@ use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_kira_audio::AudioPlugin;
+use crate::camera::CameraPlugin;
 use crate::pause::PausePlugin;
 use crate::state::{AppState, InGame, StatesPlugin};
 use crate::tileset::TilePlugin;
@@ -37,6 +38,7 @@ impl Plugin for GamePlugin {
                 PlayerPlugin,
                 PausePlugin,
                 TilePlugin,
+                CameraPlugin,
             ))
             .add_systems(Update, log_app_state);
 
