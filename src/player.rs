@@ -1,7 +1,11 @@
-use crate::loading::TextureAssets;
+use crate::loading::{Levels, TextureAssets};
 use bevy::prelude::*;
 use bevy::render::camera::ScalingMode;
+use crate::camera::{CameraRegion2d, CameraTarget};
 use crate::state::{AppState, InGame, Paused};
+use crate::tileset;
+use crate::tileset::load::{TileGridBundle, TileGridLoadEvent, TileGridSettings};
+use crate::tileset::tile::Tile;
 
 pub struct PlayerPlugin;
 
@@ -9,34 +13,87 @@ pub struct PlayerPlugin;
 /// Player logic is only active during the State `GameState::Playing`
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(InGame), spawn_player);
+        app.add_systems(OnEnter(InGame), spawn_level)
+            .add_systems(Update,
+                         spawn_player_and_camera
+                             .after(tileset::load::spawn_grid)
+                             .run_if(not(in_state(AppState::Loading)))
+            );
         //     .add_systems(Update, move_player.run_if(in_state(Paused(false))));
     }
 }
 
-fn spawn_player(
+#[derive(Component)]
+pub struct Player;
+
+fn spawn_level(
     mut commands: Commands,
     assets: Res<TextureAssets>,
+    levels: Res<Levels>,
 ) {
-    commands.spawn((
-        Name::new("Camera"),
-        StateScoped(InGame),
-        Camera2dBundle {
-            projection: OrthographicProjection {
-                scaling_mode: ScalingMode::FixedVertical(240.0),
-                ..default()
-            },
-            transform: Transform::from_xyz(0.0, 0.0, 10.0),
-            ..default()
-        },
-    ));
     
     commands.spawn((
-        Name::new("Player"),
+        Name::new("Tilemap"),
         StateScoped(InGame),
-        SpriteBundle {
-            texture: assets.player.clone(),
+        TileGridBundle {
+            settings: TileGridSettings {
+                solid_texture: assets.block.clone(),
+                ramp_texture: assets.ramp.clone(),
+                tile_size: 16.0,
+            },
+            tile_grid: levels.test_level.clone(),
             ..default()
         }
     ));
+}
+
+fn spawn_player_and_camera(
+    mut commands: Commands,
+    mut tile_grid: EventReader<TileGridLoadEvent>,
+    texture_assets: Res<TextureAssets>,
+    global_pos: Query<&GlobalTransform>,
+) {
+    for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
+        let mut grid_anchor = global_pos.get(*parent).unwrap().translation();
+        
+        let Some((p_x, p_y)) = grid.0.iter()
+            .filter_map(|((x, y), item)| match item {
+                Tile::Player => Some((x, y)),
+                _ => None,
+            }).next() else {
+            continue;
+        };
+        
+        let mut pos = grid_anchor;
+        pos.x += p_x as f32 * settings.tile_size;
+        pos.y -= p_y as f32 * settings.tile_size;
+        
+        let player = commands.spawn((
+            Name::new("Player"),
+            StateScoped(InGame),
+            SpriteBundle {
+                transform: Transform::from_translation(pos),
+                texture: texture_assets.player.clone(),
+                ..default()
+            }
+        )).id();
+        
+        // let bounds = CameraRegion2d(Rec)
+        let mut bottom_right = grid_anchor.xy();
+        bottom_right.x += grid.0.w as f32 * settings.tile_size;
+        bottom_right.y -= grid.0.h as f32 * settings.tile_size;
+        
+        pos.z += 10.0;
+        
+        commands.spawn((
+            Name::new("Camera"),
+            StateScoped(InGame),
+            Camera2dBundle {
+                transform: Transform::from_translation(pos),
+                ..default()
+            },
+            CameraRegion2d(Rect::from_corners(grid_anchor.xy(), bottom_right)),
+            CameraTarget(Some(player)),
+        ));
+    }
 }

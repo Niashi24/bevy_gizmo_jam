@@ -7,6 +7,7 @@ mod player;
 mod state;
 mod pause;
 mod tileset;
+mod camera;
 
 // use crate::audio::InternalAudioPlugin;
 use crate::loading::LoadingPlugin;
@@ -52,6 +53,6 @@ impl Plugin for GamePlugin {
 
 fn log_app_state(state: Res<State<AppState>>) {
     if state.is_changed() {
-        dbg!(state.get());
+        // dbg!(state.get());
     }
 }

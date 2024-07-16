@@ -726,6 +726,7 @@ dependencies = [
  "itertools 0.13.0",
  "log",
  "num",
+ "num-traits",
  "rand",
  "thiserror",
  "webbrowser",

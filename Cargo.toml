@@ -81,6 +81,7 @@ num = "0.4.3"
 hex-literal = "0.4.1"
 thiserror = "1.0.62"
 itertools = "0.13.0"
+num-traits = "0.2.19"
 
 [build-dependencies]
 embed-resource = "1"

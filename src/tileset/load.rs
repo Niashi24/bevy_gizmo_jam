@@ -1,14 +1,19 @@
 ﻿use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader};
+use std::rc::Rc;
+use std::sync::Arc;
 use bevy::asset::{AssetLoader, AsyncReadExt, LoadContext};
 use bevy::asset::io::Reader;
 use bevy::prelude::*;
+use bevy::render::camera::ScalingMode;
 use bevy::utils::ConditionalSendFuture;
 use image::ImageFormat;
 use thiserror::Error;
+use crate::loading::TextureAssets;
+use crate::state::InGame;
 use crate::tileset::grid::Grid;
-use crate::tileset::tile::{Tile, TileImageUnknownPixel};
+use crate::tileset::tile::{RampOrientation, Tile, TileImageUnknownPixel};
 
 #[test]
 fn load_tilemap() -> io::Result<()> {
@@ -21,7 +26,7 @@ fn load_tilemap() -> io::Result<()> {
     Ok(())
 }
 
-#[derive(Asset, TypePath, Debug)]
+#[derive(Asset, Debug, Reflect, Clone)]
 pub struct TileGridAsset(pub Grid<Tile>);
 
 #[derive(Default)]
@@ -58,21 +63,19 @@ impl AssetLoader for TileGridAssetLoader {
     }
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Clone)]
 pub struct TileGridSettings {
     pub solid_texture: Handle<Image>,
     pub ramp_texture: Handle<Image>,
     pub tile_size: f32,
 }
 
-
-
 #[derive(Bundle, Default)]
 pub struct TileGridBundle {
     /// The settings for this TileGrid
-    settings: TileGridSettings,
+    pub settings: TileGridSettings,
     /// The tile grid being spawned
-    tile_grid: Handle<TileGridAsset>,
+    pub tile_grid: Handle<TileGridAsset>,
     /// The local transform of the sprite, relative to its parent.
     pub transform: Transform,
     /// The absolute transform of the sprite. This should generally not be written to directly.
@@ -83,23 +86,18 @@ pub struct TileGridBundle {
     pub inherited_visibility: InheritedVisibility,
     /// Algorithmically-computed indication of whether an entity is visible and should be extracted for rendering
     pub view_visibility: ViewVisibility,
+    /// A marker telling that the asset is currently being loaded
+    pub loading_marker: TileGridLoadingMarker,
 }
 
 #[derive(Component, Default)]
 #[component(storage = "SparseSet")]
-struct TileGridLoadingMarker;
+pub struct TileGridLoadingMarker;
 
-fn init_grid(
-    query: Query<Entity, Added<TileGridSettings>>,
-    mut commands: Commands,
-) {
-    for entity in query.iter() {
-        commands.entity(entity)
-            .insert(TileGridLoadingMarker);
-    }
-}
+#[derive(Event)]
+pub struct TileGridLoadEvent(pub TileGridAsset, pub TileGridSettings, pub Entity);
 
-fn spawn_grid(
+pub(crate) fn spawn_grid(
     mut commands: Commands,
     query: Query<
         (
@@ -112,26 +110,72 @@ fn spawn_grid(
         )
     >,
     grid_assets: Res<Assets<TileGridAsset>>,
+    mut load_event: EventWriter<TileGridLoadEvent>,
 ) {
     for (entity, settings, tile_grid) in query.iter() {
         let Some(grid) = grid_assets.get(tile_grid) else {
             continue;
         };
+        
+        load_event.send(TileGridLoadEvent(grid.clone(), settings.clone(), entity));
 
+        // info!("loaded tilemap!");
+        
         let mut commands = commands.entity(entity);
 
         commands.remove::<TileGridLoadingMarker>();
+    }
+}
 
+pub fn spawn_background_tiles(
+    mut commands: Commands,
+    mut tile_grid: EventReader<TileGridLoadEvent>,
+) {
+    for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
         for ((x, y), tile) in grid.0.iter() {
             let x = x as f32 * settings.tile_size;
             let y = y as f32 * settings.tile_size;
-            commands.with_children(|parent| {
-                // let texture =
+            
+            let mut transform = Transform::from_xyz(x, -y, 0.0);
 
-                // parent.spawn(SpriteBundle {
-                //     texture:
-                //     ..default()
-                // });
+            commands.entity(*parent).with_children(|parent| {
+                match tile {
+                    Tile::Solid => {
+                        parent.spawn((
+                            Name::new("Solid"),
+                            SpriteBundle {
+                                transform,
+                                texture: settings.solid_texture.clone_weak(),
+                                ..default()
+                            },
+                            // todo: colliders
+                        ));
+                    }
+                    Tile::Ramp(orientation) => {
+                        let (flip_x, flip_y) = match orientation {
+                            RampOrientation::SW => (false, false),
+                            RampOrientation::SE => (true, false),
+                            RampOrientation::NE => (true, true),
+                            RampOrientation::NW => (false, true),
+                        };
+                        
+                        parent.spawn((
+                            Name::new(format!("Ramp: {:?}", orientation)),
+                            SpriteBundle {
+                                transform,
+                                texture: settings.ramp_texture.clone_weak(),
+                                sprite: Sprite {
+                                    flip_x,
+                                    flip_y,
+                                    ..default()
+                                },
+                                ..default()
+                            },
+                            // Todo: Colliders
+                        ));
+                    }
+                    _ => {}
+                }
             });
         }
     }

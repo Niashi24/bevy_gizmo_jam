@@ -10,7 +10,9 @@ use crate::tileset::grid::Grid;
 pub enum Tile {
     Solid,
     Air,
-    Ramp(RampOrientation)
+    Player,
+    Camera,
+    Ramp(RampOrientation),
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Reflect)]
@@ -33,16 +35,20 @@ impl TryFrom<Rgba<u8>> for Tile {
         const NE: [u8; 4] = hex!("124080ff");
         const SE: [u8; 4] = hex!("28b3cbff");
         const SW: [u8; 4] = hex!("eebf80ff");
+        const PLAYER: [u8; 4] = [255, 0, 0, 255];
+        const CAMERA: [u8; 4] = [0, 0, 255, 255];
         const SOLID: [u8; 4] = hex!("000000ff");
-        
+
         match value {
             Rgba(NW) => Ok(Tile::Ramp(RampOrientation::NW)),
             Rgba(NE) => Ok(Tile::Ramp(RampOrientation::NE)),
             Rgba(SE) => Ok(Tile::Ramp(RampOrientation::SE)),
             Rgba(SW) => Ok(Tile::Ramp(RampOrientation::SW)),
             Rgba(SOLID) => Ok(Tile::Solid),
+            Rgba(PLAYER) => Ok(Tile::Player),
+            Rgba(CAMERA) => Ok(Tile::Camera),
             Rgba([_, _, _, 0]) => Ok(Tile::Air),
-            _ => Err(UnknownPixel(value)),                                                                                                    
+            _ => Err(UnknownPixel(value)),
         }
     }
 }
@@ -69,6 +75,8 @@ impl Display for Tile {
             Tile::Solid => '■'.to_string(),
             Tile::Air => ' '.to_string(),
             Tile::Ramp(x) => x.to_string(),
+            Tile::Player => '🏃'.to_string(),
+            Tile::Camera => '📷'.to_string(),
         })
     }
 }
@@ -109,8 +117,8 @@ impl TryFrom<&DynamicImage> for Grid<Tile> {
         Grid::try_from_iter((0..value.height()).map(move |y| {
             (0..value.width()).map(move |x| {
                 Tile::try_from(value.get_pixel(x, y))
-                    .map_err(|p| TileImageUnknownPixel::new(x, y, p.0))
             })
-        })).map_err(|(_, _, e)| e)
+        }))
+            .map_err(|(x, y, e)| TileImageUnknownPixel::new(x as u32, y as u32, e.0))
     }
 }

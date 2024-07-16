@@ -115,8 +115,6 @@ fn set_pause_enabled<const ENABLED: bool>(
                 Display::None
             }
         };
-
-        dbg!(&style.display);
     }
 }
 
