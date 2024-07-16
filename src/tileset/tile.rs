@@ -1,5 +1,5 @@
 ﻿use std::fmt::{Display, Formatter};
-use bevy::prelude::Reflect;
+use bevy::prelude::{Reflect, Vec2};
 use image::{DynamicImage, GenericImageView, Pixel, Rgba};
 use hex_literal::hex;
 use itertools::Itertools;
@@ -21,6 +21,17 @@ pub enum RampOrientation {
     SE,
     NE,
     NW,
+}
+
+impl RampOrientation {
+    pub fn to_triangle(&self) -> [Vec2; 3] {
+        match self {
+            RampOrientation::SW => [Vec2::ZERO, Vec2::Y, Vec2::X],
+            RampOrientation::SE => [Vec2::X, Vec2::ZERO, Vec2::ONE],
+            RampOrientation::NE => [Vec2::ONE, Vec2::X, Vec2::Y],
+            RampOrientation::NW => [Vec2::Y, Vec2::ONE, Vec2::ZERO],
+        }
+    }
 }
 
 #[derive(Error, Debug)]
@@ -93,7 +104,7 @@ impl Display for RampOrientation {
 }
 
 #[derive(Debug, Clone, Error)]
-#[error("Unknown pixel {0:?} at ({x},{y})")]
+#[error("Unknown pixel {pixel:?} at ({x},{y})")]
 pub struct TileImageUnknownPixel {
     pub x: u32,
     pub y: u32,

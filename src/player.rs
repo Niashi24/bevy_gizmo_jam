@@ -1,3 +1,4 @@
+use avian2d::prelude::*;
 use crate::loading::{Levels, TextureAssets};
 use bevy::prelude::*;
 use bevy::render::camera::ScalingMode;
@@ -75,7 +76,9 @@ fn spawn_player_and_camera(
                 transform: Transform::from_translation(pos),
                 texture: texture_assets.player.clone(),
                 ..default()
-            }
+            },
+            Collider::circle(8.0),
+            RigidBody::Dynamic,
         )).id();
         
         // let bounds = CameraRegion2d(Rec)

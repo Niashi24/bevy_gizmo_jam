@@ -315,9 +315,9 @@ checksum = "f1fdabc7756949593fe60f30ec81974b613357de856987752631dea1e3394c80"
 
 [[package]]
 name = "avian2d"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1efc190011d07ff2e5b091ea599ae4edfaeb68977cf26a1dc543987383a494e4"
+checksum = "757274b827f77c3853fd36c4229ebeda55746fc297244bcd1104e561dab34326"
 dependencies = [
  "avian_derive",
  "bevy",
@@ -715,6 +715,7 @@ dependencies = [
 name = "bevy_game"
 version = "0.1.0"
 dependencies = [
+ "avian2d",
  "bevy",
  "bevy-inspector-egui",
  "bevy-tnua-avian2d",

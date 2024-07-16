@@ -9,6 +9,7 @@ mod pause;
 mod tileset;
 mod camera;
 
+use avian2d::prelude::*;
 // use crate::audio::InternalAudioPlugin;
 use crate::loading::LoadingPlugin;
 use crate::menu::MenuPlugin;
@@ -31,6 +32,7 @@ impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app
             .add_plugins((
+                PhysicsPlugins::default(),
                 AudioPlugin,
                 StatesPlugin,
                 LoadingPlugin,
@@ -48,6 +50,7 @@ impl Plugin for GamePlugin {
                 // FrameTimeDiagnosticsPlugin,
                 LogDiagnosticsPlugin::default(),
                 WorldInspectorPlugin::default(),
+                PhysicsDebugPlugin::default(),
             ));
         }
     }

@@ -3,6 +3,7 @@ use std::io;
 use std::io::{BufRead, BufReader};
 use std::rc::Rc;
 use std::sync::Arc;
+use avian2d::prelude::Collider;
 use bevy::asset::{AssetLoader, AsyncReadExt, LoadContext};
 use bevy::asset::io::Reader;
 use bevy::prelude::*;
@@ -148,7 +149,7 @@ pub fn spawn_background_tiles(
                                 texture: settings.solid_texture.clone_weak(),
                                 ..default()
                             },
-                            // todo: colliders
+                            Collider::rectangle(settings.tile_size, settings.tile_size),
                         ));
                     }
                     Tile::Ramp(orientation) => {
@@ -158,6 +159,10 @@ pub fn spawn_background_tiles(
                             RampOrientation::NE => (true, true),
                             RampOrientation::NW => (false, true),
                         };
+
+                        let [p1, p2, p3] = orientation.to_triangle()
+                            .map(|v| v * settings.tile_size);
+                            // .map();
                         
                         parent.spawn((
                             Name::new(format!("Ramp: {:?}", orientation)),
@@ -171,7 +176,7 @@ pub fn spawn_background_tiles(
                                 },
                                 ..default()
                             },
-                            // Todo: Colliders
+                            Collider::triangle(p1, p2, p3),
                         ));
                     }
                     _ => {}
