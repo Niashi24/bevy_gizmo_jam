@@ -15,7 +15,7 @@ pub enum Tile {
 }
 
 impl Tile {
-    pub fn to_collider_verts(&self) -> Option<Polygon<f32>> {
+    pub fn to_collider_verts(self) -> Option<Polygon<f32>> {
         match self {
             Tile::Solid => Some(Polygon::new(LineString::from(vec![(-0.5, -0.5), (-0.5, 0.5), (0.5, 0.5), (0.5, -0.5), (-0.5, -0.5)]), vec![])),
             Tile::Ramp(x) => {
@@ -38,7 +38,7 @@ pub enum RampOrientation {
 }
 
 impl RampOrientation {
-    pub fn to_triangle(&self) -> [Vec2; 3] {
+    pub fn to_triangle(self) -> [Vec2; 3] {
         match self {
             RampOrientation::SW => [Vec2::ZERO, Vec2::Y, Vec2::X],
             RampOrientation::SE => [Vec2::X, Vec2::ZERO, Vec2::ONE],

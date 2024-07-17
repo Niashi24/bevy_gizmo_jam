@@ -14,7 +14,7 @@ pub struct Grid<T> {
 impl<T> Grid<T> {
     pub fn new(grid: Vec<Vec<T>>) -> Self {
         let h = grid.len();
-        let w = grid.get(0).unwrap_or(&vec![]).len();
+        let w = grid.first().map(Vec::len).unwrap_or(0);
         Self {
             grid,
             w,
@@ -70,7 +70,7 @@ impl<T> Grid<T> {
 
     #[allow(dead_code)]
     pub fn map<X, FN: Fn(T) -> X>(self, func: FN) -> Grid<X> {
-        self.grid.into_iter().map(|x| x.into_iter().map(|x| func(x))).collect()
+        self.grid.into_iter().map(|x| x.into_iter().map(func)).collect()
     }
 
     #[allow(dead_code)]
@@ -164,7 +164,7 @@ impl<T: Display> Display for Grid<T> {
             for col in row.iter() {
                 write!(f, "{}", col)?;
             }
-            writeln!(f, "")?;
+            writeln!(f)?;
         }
         
         Ok(())

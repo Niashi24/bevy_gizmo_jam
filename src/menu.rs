@@ -201,7 +201,7 @@ fn click_play_button(
         match *interaction {
             Interaction::Pressed => {
                 if let Some(state) = change_state {
-                    next_state.set(state.0.clone());
+                    next_state.set(state.0);
                 } else if let Some(link) = open_link {
                     if let Err(error) = webbrowser::open(link.0) {
                         warn!("Failed to open link {error:?}");
