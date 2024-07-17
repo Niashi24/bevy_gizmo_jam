@@ -70,7 +70,7 @@ impl<T> Grid<T> {
 
     #[allow(dead_code)]
     pub fn map<X, FN: Fn(T) -> X>(self, func: FN) -> Grid<X> {
-        self.grid.into_iter().map(|x| x.into_iter().map(func)).collect()
+        self.grid.into_iter().map(|x| x.into_iter().map(&func)).collect()
     }
 
     #[allow(dead_code)]
