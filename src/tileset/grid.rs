@@ -1,8 +1,5 @@
-﻿use std::fmt::{Display, Formatter};
 use bevy::prelude::Reflect;
-
-
-
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Reflect)]
 pub struct Grid<T> {
@@ -15,18 +12,14 @@ impl<T> Grid<T> {
     pub fn new(grid: Vec<Vec<T>>) -> Self {
         let h = grid.len();
         let w = grid.first().map(Vec::len).unwrap_or(0);
-        Self {
-            grid,
-            w,
-            h
-        }
+        Self { grid, w, h }
     }
-    
+
     #[inline]
     pub fn get(&self, x: usize, y: usize) -> Option<&T> {
         self.grid.get(y).and_then(|y| y.get(x))
     }
-    
+
     #[inline]
     #[allow(dead_code)]
     pub fn get_mut(&mut self, x: usize, y: usize) -> Option<&mut T> {
@@ -35,8 +28,11 @@ impl<T> Grid<T> {
 
     #[allow(dead_code)]
     pub fn get_i(&self, x: i64, y: i64) -> Option<&T> {
-        if x < 0 || y < 0 { None }
-        else { self.get(x as usize, y as usize) }
+        if x < 0 || y < 0 {
+            None
+        } else {
+            self.get(x as usize, y as usize)
+        }
     }
 
     #[allow(dead_code)]
@@ -70,7 +66,10 @@ impl<T> Grid<T> {
 
     #[allow(dead_code)]
     pub fn map<X, FN: Fn(T) -> X>(self, func: FN) -> Grid<X> {
-        self.grid.into_iter().map(|x| x.into_iter().map(&func)).collect()
+        self.grid
+            .into_iter()
+            .map(|x| x.into_iter().map(&func))
+            .collect()
     }
 
     #[allow(dead_code)]
@@ -79,12 +78,16 @@ impl<T> Grid<T> {
         IT: IntoIterator<Item = Result<T, E>>,
         TIT: IntoIterator<Item = IT>,
     {
-        iter.into_iter().enumerate()
+        iter.into_iter()
+            .enumerate()
             .map(move |(y, inner)| {
-                inner.into_iter().enumerate().map(|(x, item)| {
-                    item.map_err(|e| (x, y, e))
-                }).collect::<Result<_, _>>()
-            }).collect::<Result<_, _>>()
+                inner
+                    .into_iter()
+                    .enumerate()
+                    .map(|(x, item)| item.map_err(|e| (x, y, e)))
+                    .collect::<Result<_, _>>()
+            })
+            .collect::<Result<_, _>>()
             .map(Self::new)
     }
 }
@@ -99,9 +102,8 @@ impl<'a, T> Iterator for GridIter<'a, T> {
     type Item = ((usize, usize), &'a T);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let item = self.grid.get(self.x, self.y)
-            .map(|x| ((self.x, self.y), x));
-        
+        let item = self.grid.get(self.x, self.y).map(|x| ((self.x, self.y), x));
+
         self.x += 1;
         if self.x == self.grid.w {
             self.y += 1;
@@ -110,20 +112,17 @@ impl<'a, T> Iterator for GridIter<'a, T> {
                 return None;
             }
         }
-        
+
         item
     }
 }
 
 impl<T, IT> FromIterator<IT> for Grid<T>
-    where
-        IT: IntoIterator<Item = T>
+where
+    IT: IntoIterator<Item = T>,
 {
-    fn from_iter<TIT: IntoIterator<Item=IT>>(iter: TIT) -> Self {
-        Self::new(iter.into_iter()
-            .map(|y| y.into_iter()
-                .collect())
-            .collect())
+    fn from_iter<TIT: IntoIterator<Item = IT>>(iter: TIT) -> Self {
+        Self::new(iter.into_iter().map(|y| y.into_iter().collect()).collect())
     }
 }
 //
@@ -166,8 +165,7 @@ impl<T: Display> Display for Grid<T> {
             }
             writeln!(f)?;
         }
-        
+
         Ok(())
     }
 }
-

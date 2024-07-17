@@ -1,8 +1,8 @@
+use crate::state::AppState;
+use crate::tileset::load::TileGridAsset;
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use bevy_kira_audio::AudioSource;
-use crate::state::AppState;
-use crate::tileset::load::TileGridAsset;
 
 pub struct LoadingPlugin;
 
@@ -18,9 +18,9 @@ impl Plugin for LoadingPlugin {
                 .load_collection::<TextureAssets>()
                 .load_collection::<Levels>(),
         )
-            .register_type::<AudioAssets>()
-            .register_type::<TextureAssets>()
-            .register_type::<Levels>();
+        .register_type::<AudioAssets>()
+        .register_type::<TextureAssets>()
+        .register_type::<Levels>();
     }
 }
 

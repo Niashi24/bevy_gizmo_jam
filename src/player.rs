@@ -1,14 +1,14 @@
-use avian2d::prelude::*;
-use crate::loading::{Levels, TextureAssets};
-use bevy::prelude::*;
-use bevy::render::camera::ScalingMode;
-use bevy_tnua::prelude::{TnuaBuiltinWalk, TnuaController, TnuaControllerBundle};
-use bevy_tnua_avian2d::TnuaAvian2dSensorShape;
 use crate::camera::{CameraRegion2d, CameraTarget};
+use crate::loading::{Levels, TextureAssets};
 use crate::state::{AppState, InGame, Paused};
 use crate::tileset;
 use crate::tileset::load::{TileGridBundle, TileGridLoadEvent, TileGridSettings};
 use crate::tileset::tile::Tile;
+use avian2d::prelude::*;
+use bevy::prelude::*;
+use bevy::render::camera::ScalingMode;
+use bevy_tnua::prelude::{TnuaBuiltinWalk, TnuaController, TnuaControllerBundle};
+use bevy_tnua_avian2d::TnuaAvian2dSensorShape;
 
 pub struct PlayerPlugin;
 
@@ -16,17 +16,15 @@ pub struct PlayerPlugin;
 /// Player logic is only active during the State `GameState::Playing`
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(InGame), spawn_level)
-            .add_systems(
-                Update,
-                (
-                    spawn_player_and_camera
-                        .after(tileset::load::spawn_grid)
-                        .run_if(not(in_state(AppState::Loading))),
-                    move_player
-                        .run_if(in_state(Paused(false)))
-                ),
-            );
+        app.add_systems(OnEnter(InGame), spawn_level).add_systems(
+            Update,
+            (
+                spawn_player_and_camera
+                    .after(tileset::load::spawn_grid)
+                    .run_if(not(in_state(AppState::Loading))),
+                move_player.run_if(in_state(Paused(false))),
+            ),
+        );
         //     .add_systems(Update, move_player.run_if(in_state(Paused(false))));
     }
 }
@@ -40,11 +38,7 @@ pub struct PlayerStats {
     pub walk: TnuaBuiltinWalk,
 }
 
-fn spawn_level(
-    mut commands: Commands,
-    assets: Res<TextureAssets>,
-    levels: Res<Levels>,
-) {
+fn spawn_level(mut commands: Commands, assets: Res<TextureAssets>, levels: Res<Levels>) {
     commands.spawn((
         Name::new("Tilemap"),
         StateScoped(InGame),
@@ -56,7 +50,7 @@ fn spawn_level(
             },
             tile_grid: levels.test_level.clone(),
             ..default()
-        }
+        },
     ));
 }
 
@@ -69,11 +63,15 @@ fn spawn_player_and_camera(
     for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
         let grid_anchor = global_pos.get(*parent).unwrap().translation();
 
-        let Some((p_x, p_y)) = grid.0.iter()
+        let Some((p_x, p_y)) = grid
+            .0
+            .iter()
             .filter_map(|((x, y), item)| match item {
                 Tile::Player => Some((x, y)),
                 _ => None,
-            }).next() else {
+            })
+            .next()
+        else {
             continue;
         };
 
@@ -85,30 +83,32 @@ fn spawn_player_and_camera(
         let mut sensor = collider.clone();
         sensor.scale_by(Vec2::new(0.95, 1.0), 1);
 
-        let player = commands.spawn((
-            Name::new("Player"),
-            StateScoped(InGame),
-            Player,
-            PlayerStats {
-                speed: 128.0,
-                walk: TnuaBuiltinWalk {
-                    float_height: 4.0,
-                    acceleration: 256.0,
-                    air_acceleration: 16.0,
+        let player = commands
+            .spawn((
+                Name::new("Player"),
+                StateScoped(InGame),
+                Player,
+                PlayerStats {
+                    speed: 128.0,
+                    walk: TnuaBuiltinWalk {
+                        float_height: 4.0,
+                        acceleration: 256.0,
+                        air_acceleration: 16.0,
+                        ..default()
+                    },
+                },
+                SpriteBundle {
+                    transform: Transform::from_translation(pos),
+                    texture: texture_assets.player.clone(),
                     ..default()
                 },
-            },
-            SpriteBundle {
-                transform: Transform::from_translation(pos),
-                texture: texture_assets.player.clone(),
-                ..default()
-            },
-            collider,
-            TnuaAvian2dSensorShape(sensor),
-            TnuaControllerBundle::default(),
-            RigidBody::Dynamic,
-            LockedAxes::ROTATION_LOCKED,
-        )).id();
+                collider,
+                TnuaAvian2dSensorShape(sensor),
+                TnuaControllerBundle::default(),
+                RigidBody::Dynamic,
+                LockedAxes::ROTATION_LOCKED,
+            ))
+            .id();
 
         // let bounds = CameraRegion2d(Rec)
         let mut bottom_right = grid_anchor.xy();
@@ -139,19 +139,13 @@ fn spawn_player_and_camera(
 }
 
 fn move_player(
-    mut player: Query
-    <
-        (
-            &mut TnuaController,
-            &PlayerStats,
-        )
-    >,
+    mut player: Query<(&mut TnuaController, &PlayerStats)>,
     input: Res<ButtonInput<KeyCode>>,
 ) {
     for (mut controller, stats) in player.iter_mut() {
-        let x = input.pressed(KeyCode::ArrowRight) as i32 as f32 -
-            input.pressed(KeyCode::ArrowLeft) as i32 as f32;
-        
+        let x = input.pressed(KeyCode::ArrowRight) as i32 as f32
+            - input.pressed(KeyCode::ArrowLeft) as i32 as f32;
+
         controller.basis(TnuaBuiltinWalk {
             desired_forward: Vec3::X * x,
             desired_velocity: Vec3::X * (x * stats.speed),

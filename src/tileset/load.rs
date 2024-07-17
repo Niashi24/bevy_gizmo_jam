@@ -1,18 +1,21 @@
-﻿use std::io;
-use avian2d::prelude::*;
-use bevy::asset::{AssetLoader, AsyncReadExt, LoadContext};
-use bevy::asset::io::Reader;
-use bevy::prelude::*;
-use geo::{BooleanOps, CoordsIter, MultiPolygon, Scale, Translate};
-use thiserror::Error;
 use crate::tileset::grid::Grid;
 use crate::tileset::tile::{RampOrientation, Tile, TileImageUnknownPixel};
+use avian2d::prelude::*;
+use bevy::asset::io::Reader;
+use bevy::asset::{AssetLoader, AsyncReadExt, LoadContext};
+use bevy::prelude::*;
+use geo::{BooleanOps, CoordsIter, MultiPolygon, Scale, Translate};
+use std::io;
+use thiserror::Error;
 
 #[test]
 fn load_tilemap() -> io::Result<()> {
-    let grid: Grid<Tile> = (&image::io::Reader::open("assets/levels/test_level.png").unwrap()
-        .decode().unwrap())
-        .try_into().unwrap();
+    let grid: Grid<Tile> = (&image::io::Reader::open("assets/levels/test_level.png")
+        .unwrap()
+        .decode()
+        .unwrap())
+        .try_into()
+        .unwrap();
 
     println!("{}", grid);
 
@@ -92,14 +95,7 @@ pub struct TileGridLoadEvent(pub TileGridAsset, pub TileGridSettings, pub Entity
 
 pub(crate) fn spawn_grid(
     mut commands: Commands,
-    query: Query<
-        (
-            Entity,
-            &TileGridSettings,
-            &Handle<TileGridAsset>
-        ),
-        With<TileGridLoadingMarker>
-    >,
+    query: Query<(Entity, &TileGridSettings, &Handle<TileGridAsset>), With<TileGridLoadingMarker>>,
     grid_assets: Res<Assets<TileGridAsset>>,
     mut load_event: EventWriter<TileGridLoadEvent>,
 ) {
@@ -118,12 +114,8 @@ pub(crate) fn spawn_grid(
     }
 }
 
-pub fn spawn_ramps(
-    mut commands: Commands,
-    mut tile_grid: EventReader<TileGridLoadEvent>,
-) {
+pub fn spawn_ramps(mut commands: Commands, mut tile_grid: EventReader<TileGridLoadEvent>) {
     for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
-
         let colliders_parent = commands
             .spawn_empty()
             .insert(Name::new("Background Tiles"))
@@ -131,49 +123,47 @@ pub fn spawn_ramps(
             .id();
         commands.entity(*parent).add_child(colliders_parent);
         let mut commands = commands.entity(colliders_parent);
-        
+
         for ((x, y), tile) in grid.0.iter() {
             let x = x as f32 * settings.tile_size;
             let y = y as f32 * settings.tile_size;
-            
+
             let transform = Transform::from_xyz(x, -y, 0.0);
-        
-            commands.with_children(|parent| {
-                match tile {
-                    Tile::Solid => {
-                        parent.spawn((
-                            Name::new("Solid"),
-                            SpriteBundle {
-                                transform,
-                                texture: settings.solid_texture.clone_weak(),
-                                ..default()
-                            },
-                        ));
-                    }
-                    Tile::Ramp(orientation) => {
-                        let (flip_x, flip_y) = match orientation {
-                            RampOrientation::SW => (false, false),
-                            RampOrientation::SE => (true, false),
-                            RampOrientation::NE => (true, true),
-                            RampOrientation::NW => (false, true),
-                        };
-                        
-                        parent.spawn((
-                            Name::new(format!("Ramp: {:?}", orientation)),
-                            SpriteBundle {
-                                transform,
-                                texture: settings.ramp_texture.clone_weak(),
-                                sprite: Sprite {
-                                    flip_x,
-                                    flip_y,
-                                    ..default()
-                                },
-                                ..default()
-                            },
-                        ));
-                    }
-                    _ => {}
+
+            commands.with_children(|parent| match tile {
+                Tile::Solid => {
+                    parent.spawn((
+                        Name::new("Solid"),
+                        SpriteBundle {
+                            transform,
+                            texture: settings.solid_texture.clone_weak(),
+                            ..default()
+                        },
+                    ));
                 }
+                Tile::Ramp(orientation) => {
+                    let (flip_x, flip_y) = match orientation {
+                        RampOrientation::SW => (false, false),
+                        RampOrientation::SE => (true, false),
+                        RampOrientation::NE => (true, true),
+                        RampOrientation::NW => (false, true),
+                    };
+
+                    parent.spawn((
+                        Name::new(format!("Ramp: {:?}", orientation)),
+                        SpriteBundle {
+                            transform,
+                            texture: settings.ramp_texture.clone_weak(),
+                            sprite: Sprite {
+                                flip_x,
+                                flip_y,
+                                ..default()
+                            },
+                            ..default()
+                        },
+                    ));
+                }
+                _ => {}
             });
         }
     }
@@ -202,24 +192,38 @@ pub fn spawn_background_tiles(
     mut tile_grid: EventReader<TileGridLoadEvent>,
 ) {
     for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
-
         let now = std::time::Instant::now();
 
-        let polygons = grid.0.iter()
-            .flat_map(|((x, y), t)| t.to_collider_verts()
-                .map(|mut p| {
-                    p.translate_mut(x as f32 * settings.tile_size, y as f32 * -settings.tile_size);
+        let polygons = grid
+            .0
+            .iter()
+            .flat_map(|((x, y), t)| {
+                t.to_collider_verts().map(|mut p| {
+                    p.translate_mut(
+                        x as f32 * settings.tile_size,
+                        y as f32 * -settings.tile_size,
+                    );
                     p.scale_xy_mut(settings.tile_size, settings.tile_size);
 
                     p
-                }))
+                })
+            })
             .map(|p| MultiPolygon::new(vec![p]))
             .collect::<Vec<_>>();
 
-        let polygons = divide_reduce(polygons, |a, b| a.union(&b))
-            .unwrap_or(MultiPolygon::new(vec![]));
+        let polygons =
+            divide_reduce(polygons, |a, b| a.union(&b)).unwrap_or(MultiPolygon::new(vec![]));
 
-        info!("Calculated polygons in {:?}, {} polys, {} interiors", now.elapsed(), polygons.0.len(), polygons.0.iter().map(|p| p.interiors().len()).sum::<usize>());
+        info!(
+            "Calculated polygons in {:?}, {} polys, {} interiors",
+            now.elapsed(),
+            polygons.0.len(),
+            polygons
+                .0
+                .iter()
+                .map(|p| p.interiors().len())
+                .sum::<usize>()
+        );
 
         let colliders_parent = commands
             .spawn_empty()
@@ -230,7 +234,8 @@ pub fn spawn_background_tiles(
 
         commands.with_children(|parent| {
             for p in polygons.0 {
-                let vertices = p.exterior_coords_iter()
+                let vertices = p
+                    .exterior_coords_iter()
                     .map(|p| Vec2::new(p.x, p.y))
                     .collect::<Vec<_>>();
 
@@ -241,7 +246,8 @@ pub fn spawn_background_tiles(
                 ));
 
                 for interior in p.interiors() {
-                    let vertices = interior.exterior_coords_iter()
+                    let vertices = interior
+                        .exterior_coords_iter()
                         .map(|p| Vec2::new(p.x, p.y))
                         .collect::<Vec<_>>();
                     parent.spawn((

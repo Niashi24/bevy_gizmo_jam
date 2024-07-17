@@ -1,7 +1,7 @@
 use crate::loading::TextureAssets;
+use crate::state::GameInfo;
 use crate::AppState;
 use bevy::prelude::*;
-use crate::state::GameInfo;
 
 pub struct MenuPlugin;
 
@@ -31,10 +31,7 @@ impl Default for ButtonColors {
 
 fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
     info!("menu");
-    commands.spawn((
-        StateScoped(AppState::Menu),
-        Camera2dBundle::default()
-    ));
+    commands.spawn((StateScoped(AppState::Menu), Camera2dBundle::default()));
     commands
         .spawn((
             StateScoped(AppState::Menu),

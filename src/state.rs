@@ -1,4 +1,4 @@
-﻿use bevy::app::App;
+use bevy::app::App;
 use bevy::prelude::*;
 
 pub struct StatesPlugin;
@@ -70,5 +70,5 @@ pub enum GamePhase {
     #[default]
     Setup,
     InGame,
-    Completed
+    Completed,
 }

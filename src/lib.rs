@@ -19,33 +19,32 @@ use crate::state::{AppState, StatesPlugin};
 use crate::tileset::TilePlugin;
 
 mod audio;
+mod camera;
 mod loading;
 mod menu;
+mod pause;
 mod player;
 mod state;
-mod pause;
 mod tileset;
-mod camera;
 
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_plugins((
-                PhysicsPlugins::default(),
-                TnuaAvian2dPlugin::default(),
-                TnuaControllerPlugin::default(),
-                AudioPlugin,
-                StatesPlugin,
-                LoadingPlugin,
-                MenuPlugin,
-                PlayerPlugin,
-                PausePlugin,
-                TilePlugin,
-                CameraPlugin,
-            ))
-            .add_systems(Update, log_app_state);
+        app.add_plugins((
+            PhysicsPlugins::default(),
+            TnuaAvian2dPlugin::default(),
+            TnuaControllerPlugin::default(),
+            AudioPlugin,
+            StatesPlugin,
+            LoadingPlugin,
+            MenuPlugin,
+            PlayerPlugin,
+            PausePlugin,
+            TilePlugin,
+            CameraPlugin,
+        ))
+        .add_systems(Update, log_app_state);
 
         #[cfg(debug_assertions)]
         {

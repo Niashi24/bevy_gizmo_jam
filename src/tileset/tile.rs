@@ -1,10 +1,10 @@
-﻿use std::fmt::{Display, Formatter};
+use crate::tileset::grid::Grid;
 use bevy::prelude::{Reflect, Vec2};
 use geo::{LineString, Polygon};
-use image::{DynamicImage, GenericImageView, Rgba};
 use hex_literal::hex;
+use image::{DynamicImage, GenericImageView, Rgba};
+use std::fmt::{Display, Formatter};
 use thiserror::Error;
-use crate::tileset::grid::Grid;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Reflect)]
 pub enum Tile {
@@ -17,12 +17,21 @@ pub enum Tile {
 impl Tile {
     pub fn to_collider_verts(self) -> Option<Polygon<f32>> {
         match self {
-            Tile::Solid => Some(Polygon::new(LineString::from(vec![(-0.5, -0.5), (-0.5, 0.5), (0.5, 0.5), (0.5, -0.5), (-0.5, -0.5)]), vec![])),
+            Tile::Solid => Some(Polygon::new(
+                LineString::from(vec![
+                    (-0.5, -0.5),
+                    (-0.5, 0.5),
+                    (0.5, 0.5),
+                    (0.5, -0.5),
+                    (-0.5, -0.5),
+                ]),
+                vec![],
+            )),
             Tile::Ramp(x) => {
                 let mut tri: Vec<_> = x.to_triangle().map(|x| (x.x, x.y)).into();
                 tri.push(tri[0]);
                 Some(Polygon::new(LineString::from(tri), vec![]))
-            },
+            }
             Tile::Air => None,
             Tile::Player => None,
         }
@@ -45,7 +54,7 @@ impl RampOrientation {
             RampOrientation::NE => [Vec2::ONE, Vec2::X, Vec2::Y],
             RampOrientation::NW => [Vec2::Y, Vec2::ONE, Vec2::ZERO],
         }
-            .map(|x| x - Vec2::splat(0.5))
+        .map(|x| x - Vec2::splat(0.5))
     }
 }
 
@@ -95,23 +104,31 @@ impl TryFrom<char> for Tile {
 
 impl Display for Tile {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match *self {
-            Tile::Solid => '■'.to_string(),
-            Tile::Air => ' '.to_string(),
-            Tile::Ramp(x) => x.to_string(),
-            Tile::Player => '🏃'.to_string(),
-        })
+        write!(
+            f,
+            "{}",
+            match *self {
+                Tile::Solid => '■'.to_string(),
+                Tile::Air => ' '.to_string(),
+                Tile::Ramp(x) => x.to_string(),
+                Tile::Player => '🏃'.to_string(),
+            }
+        )
     }
 }
 
 impl Display for RampOrientation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match *self {
-            RampOrientation::SW => '◣',
-            RampOrientation::SE => '◢',
-            RampOrientation::NE => '◥',
-            RampOrientation::NW => '◤',
-        })
+        write!(
+            f,
+            "{}",
+            match *self {
+                RampOrientation::SW => '◣',
+                RampOrientation::SE => '◢',
+                RampOrientation::NE => '◥',
+                RampOrientation::NW => '◤',
+            }
+        )
     }
 }
 
@@ -125,11 +142,7 @@ pub struct TileImageUnknownPixel {
 
 impl TileImageUnknownPixel {
     pub fn new(x: u32, y: u32, pixel: Rgba<u8>) -> Self {
-        Self {
-            x,
-            y,
-            pixel,
-        }
+        Self { x, y, pixel }
     }
 }
 
@@ -137,11 +150,11 @@ impl TryFrom<&DynamicImage> for Grid<Tile> {
     type Error = TileImageUnknownPixel;
 
     fn try_from(value: &DynamicImage) -> Result<Self, Self::Error> {
-        Grid::try_from_iter((0..value.height()).map(move |y| {
-            (0..value.width()).map(move |x| {
-                Tile::try_from(value.get_pixel(x, y))
-            })
-        }))
-            .map_err(|(x, y, e)| TileImageUnknownPixel::new(x as u32, y as u32, e.0))
+        Grid::try_from_iter(
+            (0..value.height()).map(move |y| {
+                (0..value.width()).map(move |x| Tile::try_from(value.get_pixel(x, y)))
+            }),
+        )
+        .map_err(|(x, y, e)| TileImageUnknownPixel::new(x as u32, y as u32, e.0))
     }
 }

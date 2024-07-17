@@ -4,10 +4,10 @@
 use std::io::Cursor;
 
 use bevy::asset::AssetMetaCheck;
-use bevy::DefaultPlugins;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy::winit::WinitWindows;
+use bevy::DefaultPlugins;
 use winit::window::Icon;
 
 use bevy_game::GamePlugin;
@@ -35,7 +35,6 @@ fn main() {
                     ..default()
                 })
                 .set(ImagePlugin::default_nearest()),
-
         )
         .add_plugins(GamePlugin)
         .add_systems(Startup, set_window_icon)
@@ -51,7 +50,7 @@ fn set_window_icon(
     let Some(primary) = windows.get_window(primary_entity) else {
         return;
     };
-    
+
     let icon_buf = Cursor::new(include_bytes!(
         "../build/macos/AppIcon.iconset/icon_256x256.png"
     ));
