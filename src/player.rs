@@ -81,7 +81,7 @@ fn spawn_player_and_camera(
         pos.x += p_x as f32 * settings.tile_size;
         pos.y -= p_y as f32 * settings.tile_size;
 
-        let collider = Collider::round_rectangle(12.0, 6.0, 2.0);
+        let collider = Collider::round_rectangle(8.0, 6.0, 4.0);
         let mut sensor = collider.clone();
         sensor.scale_by(Vec2::new(0.95, 1.0), 1);
 
@@ -94,7 +94,7 @@ fn spawn_player_and_camera(
                 walk: TnuaBuiltinWalk {
                     float_height: 4.0,
                     acceleration: 256.0,
-                    air_acceleration: 128.0,
+                    air_acceleration: 16.0,
                     ..default()
                 },
             },

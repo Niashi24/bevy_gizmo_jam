@@ -3,7 +3,7 @@ use avian2d::prelude::*;
 use bevy::asset::{AssetLoader, AsyncReadExt, LoadContext};
 use bevy::asset::io::Reader;
 use bevy::prelude::*;
-use geo::{BooleanOps, CoordsIter, MultiPolygon, Translate};
+use geo::{BooleanOps, CoordsIter, MultiPolygon, Scale, Translate};
 use thiserror::Error;
 use crate::tileset::grid::Grid;
 use crate::tileset::tile::{RampOrientation, Tile, TileImageUnknownPixel};
@@ -123,43 +123,62 @@ pub fn spawn_ramps(
     mut tile_grid: EventReader<TileGridLoadEvent>,
 ) {
     for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
-        commands.entity(*parent).with_children(|parent| {
-            for ((x, y), orientation) in grid.0.iter().flat_map(|(p, t)| match t {
-                Tile::Ramp(o) => Some((p, o)),
-                _ => None,
-            }) {
-                let x = x as f32 * settings.tile_size;
-                let y = y as f32 * settings.tile_size;
 
-                let transform = Transform::from_xyz(x, -y, 0.0);
-
-                let (flip_x, flip_y) = match orientation {
-                    RampOrientation::SW => (false, false),
-                    RampOrientation::SE => (true, false),
-                    RampOrientation::NE => (true, true),
-                    RampOrientation::NW => (false, true),
-                };
-
-                let [p1, p2, p3] = orientation.to_triangle()
-                    .map(|v| v * settings.tile_size);
-
-                parent.spawn((
-                    Name::new(format!("Ramp: {:?}", orientation)),
-                    SpriteBundle {
-                        transform,
-                        texture: settings.ramp_texture.clone_weak(),
-                        sprite: Sprite {
-                            flip_x,
-                            flip_y,
-                            ..default()
-                        },
-                        ..default()
-                    },
-                    Collider::triangle(p1, p2, p3),
-                    RigidBody::Static,
-                ));
-            }
-        });
+        let colliders_parent = commands
+            .spawn_empty()
+            .insert(Name::new("Background Tiles"))
+            .insert(SpatialBundle::default())
+            .id();
+        commands.entity(*parent).add_child(colliders_parent);
+        let mut commands = commands.entity(colliders_parent);
+        
+        for ((x, y), tile) in grid.0.iter() {
+            let x = x as f32 * settings.tile_size;
+            let y = y as f32 * settings.tile_size;
+            
+            let transform = Transform::from_xyz(x, -y, 0.0);
+        
+            commands.with_children(|parent| {
+                match tile {
+                    Tile::Solid => {
+                        parent.spawn((
+                            Name::new("Solid"),
+                            SpriteBundle {
+                                transform,
+                                texture: settings.solid_texture.clone_weak(),
+                                ..default()
+                            },
+                        ));
+                    }
+                    Tile::Ramp(orientation) => {
+                        let (flip_x, flip_y) = match orientation {
+                            RampOrientation::SW => (false, false),
+                            RampOrientation::SE => (true, false),
+                            RampOrientation::NE => (true, true),
+                            RampOrientation::NW => (false, true),
+                        };
+        
+                        let [p1, p2, p3] = orientation.to_triangle()
+                            .map(|v| v * settings.tile_size);
+                        
+                        parent.spawn((
+                            Name::new(format!("Ramp: {:?}", orientation)),
+                            SpriteBundle {
+                                transform,
+                                texture: settings.ramp_texture.clone_weak(),
+                                sprite: Sprite {
+                                    flip_x,
+                                    flip_y,
+                                    ..default()
+                                },
+                                ..default()
+                            },
+                        ));
+                    }
+                    _ => {}
+                }
+            });
+        }
     }
 }
 
@@ -175,19 +194,18 @@ pub fn spawn_background_tiles(
             .flat_map(|((x, y), t)| t.to_collider_verts()
                 .map(|mut p| {
                     p.translate_mut(x as f32 * settings.tile_size, y as f32 * -settings.tile_size);
+                    p.scale_xy_mut(settings.tile_size, settings.tile_size);
 
                     p
                 }))
             .fold(MultiPolygon::new(vec![]), |acc, p| acc.union(&p.into()));
 
-        info!("Calculated polygons in {:?}", now.elapsed());
+        info!("Calculated polygons in {:?}, {} polys, {} interiors", now.elapsed(), polygons.0.len(), polygons.0.iter().map(|p| p.interiors().len()).sum::<usize>());
 
-        dbg!(polygons.0.len());
-        dbg!(polygons.0.iter().map(|p| p.interiors().len()).sum::<usize>());
-
-        // dbg!(&polygons);
-
-        let colliders_parent = commands.spawn_empty().id();
+        let colliders_parent = commands
+            .spawn_empty()
+            .insert(Name::new("Background Colliders"))
+            .id();
         commands.entity(*parent).add_child(colliders_parent);
         let mut commands = commands.entity(colliders_parent);
 
@@ -198,94 +216,22 @@ pub fn spawn_background_tiles(
                     .collect::<Vec<_>>();
 
                 parent.spawn((
+                    Name::new("Polygon Collider (Exterior)"),
                     Collider::polyline(vertices, None),
                     RigidBody::Static,
                 ));
+
+                for interior in p.interiors() {
+                    let vertices = interior.exterior_coords_iter()
+                        .map(|p| Vec2::new(p.x, p.y))
+                        .collect::<Vec<_>>();
+                    parent.spawn((
+                        Name::new("Polygon Collider (Interior)"),
+                        Collider::polyline(vertices, None),
+                        RigidBody::Static,
+                    ));
+                }
             }
         });
-
-        // for polygon in polygons {
-            
-        // }
-
-        // commands.entity(*parent).with_children(|parent| {
-        //     for r in rectangles {
-        //         let start_x = r.start_x as f32 * settings.tile_size;
-        //         let start_y = r.start_y as f32 * settings.tile_size;
-        //         let width = (r.end_x - r.start_x + 1) as f32 * settings.tile_size;
-        //         let height = (r.end_y - r.start_y + 1) as f32 * settings.tile_size;
-        //
-        //         let x = start_x + (width / 2.0);
-        //         let y = start_y + (height / 2.0);
-        //
-        //         // Dummy implementation of physics body and shape creation
-        //         let body = x; // Replace with actual body creation
-        //         let shape = (x, y, width, height); // Replace with actual shape creation
-        //
-        //         parent.spawn((
-        //             Name::new("Solid"),
-        //             SpriteBundle {
-        //                 transform: Transform::from_xyz(x, -y, 0.0),
-        //                 texture: settings.solid_texture.clone_weak(),
-        //                 ..default()
-        //             },
-        //             Collider::rectangle(width, height),
-        //             RigidBody::Static,
-        //         ));
-        //     }
-        // });
-
-
-        // for ((x, y), tile) in grid.0.iter() {
-        //     let x = x as f32 * settings.tile_size;
-        //     let y = y as f32 * settings.tile_size;
-        //     
-        //     let transform = Transform::from_xyz(x, -y, 0.0);
-        // 
-        //     commands.entity(*parent).with_children(|parent| {
-        //         match tile {
-        //             Tile::Solid => {
-        //                 parent.spawn((
-        //                     Name::new("Solid"),
-        //                     SpriteBundle {
-        //                         transform,
-        //                         texture: settings.solid_texture.clone_weak(),
-        //                         ..default()
-        //                     },
-        //                     Collider::rectangle(settings.tile_size, settings.tile_size),
-        //                     RigidBody::Static,
-        //                 ));
-        //             }
-        //             Tile::Ramp(orientation) => {
-        //                 let (flip_x, flip_y) = match orientation {
-        //                     RampOrientation::SW => (false, false),
-        //                     RampOrientation::SE => (true, false),
-        //                     RampOrientation::NE => (true, true),
-        //                     RampOrientation::NW => (false, true),
-        //                 };
-        // 
-        //                 let [p1, p2, p3] = orientation.to_triangle()
-        //                     .map(|v| v * settings.tile_size);
-        //                 
-        //                 parent.spawn((
-        //                     Name::new(format!("Ramp: {:?}", orientation)),
-        //                     SpriteBundle {
-        //                         transform,
-        //                         texture: settings.ramp_texture.clone_weak(),
-        //                         sprite: Sprite {
-        //                             flip_x,
-        //                             flip_y,
-        //                             ..default()
-        //                         },
-        //                         ..default()
-        //                     },
-        //                     Collider::triangle(p1, p2, p3),
-        //                     RigidBody::Static,
-        //                 ));
-        //             }
-        //             _ => {}
-        //         }
-        //     });
-        // }
     }
 }
