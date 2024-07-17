@@ -192,7 +192,6 @@ pub fn spawn_background_tiles(
     mut tile_grid: EventReader<TileGridLoadEvent>,
 ) {
     for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
-        let now = std::time::Instant::now();
 
         let polygons = grid
             .0
@@ -213,17 +212,6 @@ pub fn spawn_background_tiles(
 
         let polygons =
             divide_reduce(polygons, |a, b| a.union(&b)).unwrap_or(MultiPolygon::new(vec![]));
-
-        info!(
-            "Calculated polygons in {:?}, {} polys, {} interiors",
-            now.elapsed(),
-            polygons.0.len(),
-            polygons
-                .0
-                .iter()
-                .map(|p| p.interiors().len())
-                .sum::<usize>()
-        );
 
         let colliders_parent = commands
             .spawn_empty()
