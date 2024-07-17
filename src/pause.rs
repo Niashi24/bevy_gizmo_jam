@@ -1,7 +1,8 @@
-﻿use bevy::input::common_conditions::{input_just_pressed, input_pressed};
-use bevy::input::keyboard::KeyboardInput;
+﻿use avian2d::prelude::*;
+use bevy::input::common_conditions::input_just_pressed;
 use bevy::prelude::*;
-use crate::state::{AppState, GameInfo, InGame, Paused};
+
+use crate::state::{AppState, InGame, Paused};
 
 pub struct PausePlugin;
 
@@ -9,8 +10,8 @@ impl Plugin for PausePlugin {
     fn build(&self, app: &mut App) {
         app
             .add_systems(OnEnter(InGame), spawn_pause_menu)
-            .add_systems(OnEnter(Paused(true)), set_pause_enabled::<true>)
-            .add_systems(OnEnter(Paused(false)), set_pause_enabled::<false>)
+            .add_systems(OnEnter(Paused(true)), (set_pause_enabled::<true>, pause_physics))
+            .add_systems(OnEnter(Paused(false)), (set_pause_enabled::<false>, unpause_physics))
             .add_systems(Update, (
                 toggle_pause.run_if(input_just_pressed(KeyCode::Escape)),
                 quit_button.run_if(in_state(Paused(true))),
@@ -116,6 +117,14 @@ fn set_pause_enabled<const ENABLED: bool>(
             }
         };
     }
+}
+
+fn pause_physics(mut time: ResMut<Time<Physics>>) {
+    time.pause();
+}
+
+fn unpause_physics(mut time: ResMut<Time<Physics>>) {
+    time.unpause();
 }
 
 fn toggle_pause(

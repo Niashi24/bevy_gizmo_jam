@@ -1,6 +1,5 @@
 ﻿use std::fmt::{Display, Formatter};
 use bevy::prelude::Reflect;
-use num::traits::Euclid;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Reflect)]
 pub struct Grid<T> {

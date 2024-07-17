@@ -1,5 +1,23 @@
 #![allow(clippy::type_complexity)]
 
+use avian2d::prelude::*;
+use bevy::app::App;
+#[cfg(debug_assertions)]
+use bevy::diagnostic::LogDiagnosticsPlugin;
+use bevy::prelude::*;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_kira_audio::AudioPlugin;
+use bevy_tnua::prelude::TnuaControllerPlugin;
+use bevy_tnua_avian2d::TnuaAvian2dPlugin;
+
+use crate::camera::CameraPlugin;
+use crate::loading::LoadingPlugin;
+use crate::menu::MenuPlugin;
+use crate::pause::PausePlugin;
+use crate::player::PlayerPlugin;
+use crate::state::{AppState, StatesPlugin};
+use crate::tileset::TilePlugin;
+
 mod audio;
 mod loading;
 mod menu;
@@ -9,23 +27,6 @@ mod pause;
 mod tileset;
 mod camera;
 
-use avian2d::prelude::*;
-// use crate::audio::InternalAudioPlugin;
-use crate::loading::LoadingPlugin;
-use crate::menu::MenuPlugin;
-use crate::player::PlayerPlugin;
-
-use bevy::app::App;
-#[cfg(debug_assertions)]
-use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
-use bevy::prelude::*;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_kira_audio::AudioPlugin;
-use crate::camera::CameraPlugin;
-use crate::pause::PausePlugin;
-use crate::state::{AppState, InGame, StatesPlugin};
-use crate::tileset::TilePlugin;
-
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
@@ -33,6 +34,8 @@ impl Plugin for GamePlugin {
         app
             .add_plugins((
                 PhysicsPlugins::default(),
+                TnuaAvian2dPlugin::default(),
+                TnuaControllerPlugin::default(),
                 AudioPlugin,
                 StatesPlugin,
                 LoadingPlugin,

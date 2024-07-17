@@ -1,18 +1,9 @@
-﻿use std::fs::File;
-use std::io;
-use std::io::{BufRead, BufReader};
-use std::rc::Rc;
-use std::sync::Arc;
-use avian2d::prelude::Collider;
+﻿use std::io;
+use avian2d::prelude::*;
 use bevy::asset::{AssetLoader, AsyncReadExt, LoadContext};
 use bevy::asset::io::Reader;
 use bevy::prelude::*;
-use bevy::render::camera::ScalingMode;
-use bevy::utils::ConditionalSendFuture;
-use image::ImageFormat;
 use thiserror::Error;
-use crate::loading::TextureAssets;
-use crate::state::InGame;
 use crate::tileset::grid::Grid;
 use crate::tileset::tile::{RampOrientation, Tile, TileImageUnknownPixel};
 
@@ -37,7 +28,7 @@ pub struct TileGridAssetLoader;
 #[derive(Debug, Error)]
 pub enum TileGridAssetLoaderError {
     #[error("Could not load asset: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[from] io::Error),
     #[error("Could not load image: {0}")]
     Image(#[from] image::ImageError),
     #[error("Could not parse image: {0}")]
@@ -52,8 +43,8 @@ impl AssetLoader for TileGridAssetLoader {
     async fn load<'a>(
         &'a self,
         reader: &'a mut Reader<'_>,
-        settings: &'a Self::Settings,
-        load_context: &'a mut LoadContext<'_>,
+        _settings: &'a Self::Settings,
+        _load_context: &'a mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
@@ -106,9 +97,7 @@ pub(crate) fn spawn_grid(
             &TileGridSettings,
             &Handle<TileGridAsset>
         ),
-        (
-            With<TileGridLoadingMarker>
-        )
+        With<TileGridLoadingMarker>
     >,
     grid_assets: Res<Assets<TileGridAsset>>,
     mut load_event: EventWriter<TileGridLoadEvent>,
@@ -117,14 +106,59 @@ pub(crate) fn spawn_grid(
         let Some(grid) = grid_assets.get(tile_grid) else {
             continue;
         };
-        
+
         load_event.send(TileGridLoadEvent(grid.clone(), settings.clone(), entity));
 
         // info!("loaded tilemap!");
-        
+
         let mut commands = commands.entity(entity);
 
         commands.remove::<TileGridLoadingMarker>();
+    }
+}
+
+pub fn spawn_ramps(
+    mut commands: Commands,
+    mut tile_grid: EventReader<TileGridLoadEvent>,
+) {
+    for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
+        commands.entity(*parent).with_children(|parent| {
+            for ((x, y), orientation) in grid.0.iter().flat_map(|(p, t)| match t {
+                Tile::Ramp(o) => Some((p, o)),
+                _ => None,
+            }) {
+                let x = x as f32 * settings.tile_size;
+                let y = y as f32 * settings.tile_size;
+
+                let transform = Transform::from_xyz(x, -y, 0.0);
+
+                let (flip_x, flip_y) = match orientation {
+                    RampOrientation::SW => (false, false),
+                    RampOrientation::SE => (true, false),
+                    RampOrientation::NE => (true, true),
+                    RampOrientation::NW => (false, true),
+                };
+
+                let [p1, p2, p3] = orientation.to_triangle()
+                    .map(|v| v * settings.tile_size);
+
+                parent.spawn((
+                    Name::new(format!("Ramp: {:?}", orientation)),
+                    SpriteBundle {
+                        transform,
+                        texture: settings.ramp_texture.clone_weak(),
+                        sprite: Sprite {
+                            flip_x,
+                            flip_y,
+                            ..default()
+                        },
+                        ..default()
+                    },
+                    Collider::triangle(p1, p2, p3),
+                    RigidBody::Static,
+                ));
+            }
+        });
     }
 }
 
@@ -133,55 +167,226 @@ pub fn spawn_background_tiles(
     mut tile_grid: EventReader<TileGridLoadEvent>,
 ) {
     for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
-        for ((x, y), tile) in grid.0.iter() {
-            let x = x as f32 * settings.tile_size;
-            let y = y as f32 * settings.tile_size;
-            
-            let mut transform = Transform::from_xyz(x, -y, 0.0);
-
-            commands.entity(*parent).with_children(|parent| {
-                match tile {
-                    Tile::Solid => {
-                        parent.spawn((
-                            Name::new("Solid"),
-                            SpriteBundle {
-                                transform,
-                                texture: settings.solid_texture.clone_weak(),
-                                ..default()
-                            },
-                            Collider::rectangle(settings.tile_size, settings.tile_size),
-                        ));
-                    }
-                    Tile::Ramp(orientation) => {
-                        let (flip_x, flip_y) = match orientation {
-                            RampOrientation::SW => (false, false),
-                            RampOrientation::SE => (true, false),
-                            RampOrientation::NE => (true, true),
-                            RampOrientation::NW => (false, true),
-                        };
-
-                        let [p1, p2, p3] = orientation.to_triangle()
-                            .map(|v| v * settings.tile_size);
-                            // .map();
-                        
-                        parent.spawn((
-                            Name::new(format!("Ramp: {:?}", orientation)),
-                            SpriteBundle {
-                                transform,
-                                texture: settings.ramp_texture.clone_weak(),
-                                sprite: Sprite {
-                                    flip_x,
-                                    flip_y,
-                                    ..default()
-                                },
-                                ..default()
-                            },
-                            Collider::triangle(p1, p2, p3),
-                        ));
-                    }
-                    _ => {}
-                }
-            });
+        #[derive(Clone)]
+        struct Rectangle {
+            start_x: usize,
+            start_y: usize,
+            end_x: usize,
+            end_y: usize,
         }
+
+        let mut rectangles: Vec<Rectangle> = Vec::new();
+
+
+        for x in 0..grid.0.w {
+            let mut start_y: Option<usize> = None;
+            let mut end_y: Option<usize> = None;
+
+            for y in 0..grid.0.h {
+                if matches!(grid.0.get(x, y), Some(Tile::Solid)) {
+                    if start_y.is_none() {
+                        start_y = Some(y);
+                    }
+                    end_y = Some(y);
+                } else if let Some(start_y_val) = start_y {
+                    let mut overlaps: Vec<Rectangle> = rectangles.iter()
+                        .filter(|r| r.end_x == x - 1 && start_y_val <= r.start_y && end_y.unwrap() >= r.end_y)
+                        .cloned()
+                        .collect();
+                    overlaps.sort_by_key(|r| r.start_y);
+
+                    for r in overlaps.iter_mut() {
+                        if start_y_val < r.start_y {
+                            rectangles.push(Rectangle {
+                                start_x: x,
+                                start_y: start_y_val,
+                                end_x: x,
+                                end_y: r.start_y - 1,
+                            });
+                            // rectangles.push(new_rect(x, start_y_val, x, r.start_y - 1));
+                            start_y = Some(r.start_y);
+                        }
+                        if start_y == Some(r.start_y) {
+                            r.end_x += 1;
+                            if end_y == Some(r.end_y) {
+                                start_y = None;
+                                end_y = None;
+                            } else if end_y > Some(r.end_y) {
+                                start_y = Some(r.end_y + 1);
+                            }
+                        }
+                    }
+
+                    if start_y.is_some() || y == grid.0.h - 1 {
+                        rectangles.push(Rectangle {
+                            start_x: x,
+                            start_y: start_y_val,
+                            end_x: x,
+                            end_y: end_y.unwrap(),
+                        });
+                        start_y = None;
+                    }
+                }
+            }
+
+            if let Some(start_y_val) = start_y {
+                rectangles.push(Rectangle {
+                    start_x: x,
+                    start_y: start_y_val,
+                    end_x: x,
+                    end_y: end_y.unwrap(),
+                });
+            }
+        }
+
+        // for x in 0..grid.0.w {
+        //     let mut start_y: Option<usize> = None;
+        //     let mut end_y: Option<usize> = None;
+        // 
+        //     for y in 0..grid.0.h {
+        //         if matches!(grid.0.get(x, y), Some(Tile::Solid)) {
+        //             if start_y.is_none() {
+        //                 start_y = Some(y);
+        //             }
+        //             end_y = Some(y);
+        //         } else if start_y.is_some() {
+        //             let mut overlaps: Vec<Rectangle> = rectangles.iter()
+        //                 .filter(|r| (r.end_x == x - 1) && (start_y.unwrap() <= r.start_y) && (end_y.unwrap() >= r.end_y))
+        //                 .cloned()
+        //                 .collect();
+        //             overlaps.sort_by(|a, b| a.start_y.cmp(&b.start_y));
+        // 
+        //             for mut r in overlaps {
+        //                 if start_y.unwrap() < r.start_y {
+        //                     let new_rect = Rectangle {
+        //                         start_x: x,
+        //                         start_y: start_y.unwrap(),
+        //                         end_x: x,
+        //                         end_y: r.start_y - 1,
+        //                     };
+        //                     rectangles.push(new_rect);
+        //                     start_y = Some(r.start_y);
+        //                 }
+        // 
+        //                 if start_y.unwrap() == r.start_y {
+        //                     r.end_x += 1;
+        // 
+        //                     if end_y.unwrap() == r.end_y {
+        //                         start_y = None;
+        //                         end_y = None;
+        //                     } else if end_y.unwrap() > r.end_y {
+        //                         start_y = Some(r.end_y + 1);
+        //                     }
+        //                 }
+        //             }
+        // 
+        //             if let Some(start_y_val) = start_y {
+        //                 let new_rect = Rectangle {
+        //                     start_x: x,
+        //                     start_y: start_y_val,
+        //                     end_x: x,
+        //                     end_y: end_y.unwrap(),
+        //                 };
+        //                 rectangles.push(new_rect);
+        // 
+        //                 start_y = None;
+        //                 end_y = None;
+        //             }
+        //         }
+        //     }
+        // 
+        //     if let Some(start_y_val) = start_y {
+        //         let new_rect = Rectangle {
+        //             start_x: x,
+        //             start_y: start_y_val,
+        //             end_x: x,
+        //             end_y: end_y.unwrap(),
+        //         };
+        //         rectangles.push(new_rect);
+        // 
+        //         start_y = None;
+        //         end_y = None;
+        //     }
+        // }
+
+        commands.entity(*parent).with_children(|parent| {
+            for r in rectangles {
+                let start_x = r.start_x as f32 * settings.tile_size;
+                let start_y = r.start_y as f32 * settings.tile_size;
+                let width = (r.end_x - r.start_x + 1) as f32 * settings.tile_size;
+                let height = (r.end_y - r.start_y + 1) as f32 * settings.tile_size;
+
+                let x = start_x + (width / 2.0);
+                let y = start_y + (height / 2.0);
+
+                // Dummy implementation of physics body and shape creation
+                let body = x; // Replace with actual body creation
+                let shape = (x, y, width, height); // Replace with actual shape creation
+
+                parent.spawn((
+                    Name::new("Solid"),
+                    SpriteBundle {
+                        transform: Transform::from_xyz(x, -y, 0.0),
+                        texture: settings.solid_texture.clone_weak(),
+                        ..default()
+                    },
+                    Collider::rectangle(width, height),
+                    RigidBody::Static,
+                ));
+            }
+        });
+
+
+        // for ((x, y), tile) in grid.0.iter() {
+        //     let x = x as f32 * settings.tile_size;
+        //     let y = y as f32 * settings.tile_size;
+        //     
+        //     let transform = Transform::from_xyz(x, -y, 0.0);
+        // 
+        //     commands.entity(*parent).with_children(|parent| {
+        //         match tile {
+        //             Tile::Solid => {
+        //                 parent.spawn((
+        //                     Name::new("Solid"),
+        //                     SpriteBundle {
+        //                         transform,
+        //                         texture: settings.solid_texture.clone_weak(),
+        //                         ..default()
+        //                     },
+        //                     Collider::rectangle(settings.tile_size, settings.tile_size),
+        //                     RigidBody::Static,
+        //                 ));
+        //             }
+        //             Tile::Ramp(orientation) => {
+        //                 let (flip_x, flip_y) = match orientation {
+        //                     RampOrientation::SW => (false, false),
+        //                     RampOrientation::SE => (true, false),
+        //                     RampOrientation::NE => (true, true),
+        //                     RampOrientation::NW => (false, true),
+        //                 };
+        // 
+        //                 let [p1, p2, p3] = orientation.to_triangle()
+        //                     .map(|v| v * settings.tile_size);
+        //                 
+        //                 parent.spawn((
+        //                     Name::new(format!("Ramp: {:?}", orientation)),
+        //                     SpriteBundle {
+        //                         transform,
+        //                         texture: settings.ramp_texture.clone_weak(),
+        //                         sprite: Sprite {
+        //                             flip_x,
+        //                             flip_y,
+        //                             ..default()
+        //                         },
+        //                         ..default()
+        //                     },
+        //                     Collider::triangle(p1, p2, p3),
+        //                     RigidBody::Static,
+        //                 ));
+        //             }
+        //             _ => {}
+        //         }
+        //     });
+        // }
     }
 }

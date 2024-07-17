@@ -11,7 +11,6 @@ pub enum Tile {
     Solid,
     Air,
     Player,
-    Camera,
     Ramp(RampOrientation),
 }
 
@@ -31,6 +30,7 @@ impl RampOrientation {
             RampOrientation::NE => [Vec2::ONE, Vec2::X, Vec2::Y],
             RampOrientation::NW => [Vec2::Y, Vec2::ONE, Vec2::ZERO],
         }
+            .map(|x| x - Vec2::splat(0.5))
     }
 }
 
@@ -47,7 +47,6 @@ impl TryFrom<Rgba<u8>> for Tile {
         const SE: [u8; 4] = hex!("28b3cbff");
         const SW: [u8; 4] = hex!("eebf80ff");
         const PLAYER: [u8; 4] = [255, 0, 0, 255];
-        const CAMERA: [u8; 4] = [0, 0, 255, 255];
         const SOLID: [u8; 4] = hex!("000000ff");
 
         match value {
@@ -57,7 +56,6 @@ impl TryFrom<Rgba<u8>> for Tile {
             Rgba(SW) => Ok(Tile::Ramp(RampOrientation::SW)),
             Rgba(SOLID) => Ok(Tile::Solid),
             Rgba(PLAYER) => Ok(Tile::Player),
-            Rgba(CAMERA) => Ok(Tile::Camera),
             Rgba([_, _, _, 0]) => Ok(Tile::Air),
             _ => Err(UnknownPixel(value)),
         }
@@ -87,7 +85,6 @@ impl Display for Tile {
             Tile::Air => ' '.to_string(),
             Tile::Ramp(x) => x.to_string(),
             Tile::Player => '🏃'.to_string(),
-            Tile::Camera => '📷'.to_string(),
         })
     }
 }

@@ -19,11 +19,12 @@ impl Plugin for TilePlugin {
             .add_systems(
                 Update,
                 (
+                    spawn_grid,
                     (
-                        spawn_grid,
                         spawn_background_tiles,
-                    ).chain()
-                ).run_if(in_state(InGame))
+                        spawn_ramps,
+                    ),
+                ).chain().run_if(in_state(InGame))
             );
     }
 }
