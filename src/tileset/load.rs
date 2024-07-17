@@ -157,9 +157,6 @@ pub fn spawn_ramps(
                             RampOrientation::NE => (true, true),
                             RampOrientation::NW => (false, true),
                         };
-        
-                        let [p1, p2, p3] = orientation.to_triangle()
-                            .map(|v| v * settings.tile_size);
                         
                         parent.spawn((
                             Name::new(format!("Ramp: {:?}", orientation)),
@@ -182,6 +179,24 @@ pub fn spawn_ramps(
     }
 }
 
+fn divide_reduce<T>(mut list: Vec<T>, mut reduction: impl FnMut(T, T) -> T) -> Option<T> {
+    let mut result = Vec::with_capacity((list.len() + 1) / 2);
+
+    while list.len() > 1 {
+        loop {
+            match (list.pop(), list.pop()) {
+                (Some(one), Some(two)) => result.push(reduction(one, two)),
+                (Some(one), None) => result.push(one),
+                (None, _) => break,
+            }
+        }
+
+        std::mem::swap(&mut result, &mut list);
+    }
+
+    list.pop()
+}
+
 pub fn spawn_background_tiles(
     mut commands: Commands,
     mut tile_grid: EventReader<TileGridLoadEvent>,
@@ -198,7 +213,11 @@ pub fn spawn_background_tiles(
 
                     p
                 }))
-            .fold(MultiPolygon::new(vec![]), |acc, p| acc.union(&p.into()));
+            .map(|p| MultiPolygon::new(vec![p]))
+            .collect::<Vec<_>>();
+
+        let polygons = divide_reduce(polygons, |a, b| a.union(&b))
+            .unwrap_or(MultiPolygon::new(vec![]));
 
         info!("Calculated polygons in {:?}, {} polys, {} interiors", now.elapsed(), polygons.0.len(), polygons.0.iter().map(|p| p.interiors().len()).sum::<usize>());
 
