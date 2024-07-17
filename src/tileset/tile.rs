@@ -1,5 +1,6 @@
 ﻿use std::fmt::{Display, Formatter};
 use bevy::prelude::{Reflect, Vec2};
+use geo::{LineString, Polygon};
 use image::{DynamicImage, GenericImageView, Pixel, Rgba};
 use hex_literal::hex;
 use itertools::Itertools;
@@ -12,6 +13,21 @@ pub enum Tile {
     Air,
     Player,
     Ramp(RampOrientation),
+}
+
+impl Tile {
+    pub fn to_collider_verts(&self) -> Option<Polygon<f32>> {
+        match self {
+            Tile::Solid => Some(Polygon::new(LineString::from(vec![(-0.5, -0.5), (-0.5, 0.5), (0.5, 0.5), (0.5, -0.5), (-0.5, -0.5)]), vec![])),
+            Tile::Ramp(x) => {
+                let mut tri: Vec<_> = x.to_triangle().map(|x| (x.x, x.y)).into();
+                tri.push(tri[0]);
+                Some(Polygon::new(LineString::from(tri), vec![]))
+            },
+            Tile::Air => None,
+            Tile::Player => None,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Reflect)]

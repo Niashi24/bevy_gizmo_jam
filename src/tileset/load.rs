@@ -3,6 +3,7 @@ use avian2d::prelude::*;
 use bevy::asset::{AssetLoader, AsyncReadExt, LoadContext};
 use bevy::asset::io::Reader;
 use bevy::prelude::*;
+use geo::{BooleanOps, CoordsIter, MultiPolygon, Translate};
 use thiserror::Error;
 use crate::tileset::grid::Grid;
 use crate::tileset::tile::{RampOrientation, Tile, TileImageUnknownPixel};
@@ -167,174 +168,72 @@ pub fn spawn_background_tiles(
     mut tile_grid: EventReader<TileGridLoadEvent>,
 ) {
     for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
-        #[derive(Clone)]
-        struct Rectangle {
-            start_x: usize,
-            start_y: usize,
-            end_x: usize,
-            end_y: usize,
-        }
 
-        let mut rectangles: Vec<Rectangle> = Vec::new();
+        let now = std::time::Instant::now();
 
+        let polygons = grid.0.iter()
+            .flat_map(|((x, y), t)| t.to_collider_verts()
+                .map(|mut p| {
+                    p.translate_mut(x as f32 * settings.tile_size, y as f32 * -settings.tile_size);
 
-        for x in 0..grid.0.w {
-            let mut start_y: Option<usize> = None;
-            let mut end_y: Option<usize> = None;
+                    p
+                }))
+            .fold(MultiPolygon::new(vec![]), |acc, p| acc.union(&p.into()));
 
-            for y in 0..grid.0.h {
-                if matches!(grid.0.get(x, y), Some(Tile::Solid)) {
-                    if start_y.is_none() {
-                        start_y = Some(y);
-                    }
-                    end_y = Some(y);
-                } else if let Some(start_y_val) = start_y {
-                    let mut overlaps: Vec<Rectangle> = rectangles.iter()
-                        .filter(|r| r.end_x == x - 1 && start_y_val <= r.start_y && end_y.unwrap() >= r.end_y)
-                        .cloned()
-                        .collect();
-                    overlaps.sort_by_key(|r| r.start_y);
+        info!("Calculated polygons in {:?}", now.elapsed());
 
-                    for r in overlaps.iter_mut() {
-                        if start_y_val < r.start_y {
-                            rectangles.push(Rectangle {
-                                start_x: x,
-                                start_y: start_y_val,
-                                end_x: x,
-                                end_y: r.start_y - 1,
-                            });
-                            // rectangles.push(new_rect(x, start_y_val, x, r.start_y - 1));
-                            start_y = Some(r.start_y);
-                        }
-                        if start_y == Some(r.start_y) {
-                            r.end_x += 1;
-                            if end_y == Some(r.end_y) {
-                                start_y = None;
-                                end_y = None;
-                            } else if end_y > Some(r.end_y) {
-                                start_y = Some(r.end_y + 1);
-                            }
-                        }
-                    }
+        dbg!(polygons.0.len());
+        dbg!(polygons.0.iter().map(|p| p.interiors().len()).sum::<usize>());
 
-                    if start_y.is_some() || y == grid.0.h - 1 {
-                        rectangles.push(Rectangle {
-                            start_x: x,
-                            start_y: start_y_val,
-                            end_x: x,
-                            end_y: end_y.unwrap(),
-                        });
-                        start_y = None;
-                    }
-                }
-            }
+        // dbg!(&polygons);
 
-            if let Some(start_y_val) = start_y {
-                rectangles.push(Rectangle {
-                    start_x: x,
-                    start_y: start_y_val,
-                    end_x: x,
-                    end_y: end_y.unwrap(),
-                });
-            }
-        }
+        let colliders_parent = commands.spawn_empty().id();
+        commands.entity(*parent).add_child(colliders_parent);
+        let mut commands = commands.entity(colliders_parent);
 
-        // for x in 0..grid.0.w {
-        //     let mut start_y: Option<usize> = None;
-        //     let mut end_y: Option<usize> = None;
-        // 
-        //     for y in 0..grid.0.h {
-        //         if matches!(grid.0.get(x, y), Some(Tile::Solid)) {
-        //             if start_y.is_none() {
-        //                 start_y = Some(y);
-        //             }
-        //             end_y = Some(y);
-        //         } else if start_y.is_some() {
-        //             let mut overlaps: Vec<Rectangle> = rectangles.iter()
-        //                 .filter(|r| (r.end_x == x - 1) && (start_y.unwrap() <= r.start_y) && (end_y.unwrap() >= r.end_y))
-        //                 .cloned()
-        //                 .collect();
-        //             overlaps.sort_by(|a, b| a.start_y.cmp(&b.start_y));
-        // 
-        //             for mut r in overlaps {
-        //                 if start_y.unwrap() < r.start_y {
-        //                     let new_rect = Rectangle {
-        //                         start_x: x,
-        //                         start_y: start_y.unwrap(),
-        //                         end_x: x,
-        //                         end_y: r.start_y - 1,
-        //                     };
-        //                     rectangles.push(new_rect);
-        //                     start_y = Some(r.start_y);
-        //                 }
-        // 
-        //                 if start_y.unwrap() == r.start_y {
-        //                     r.end_x += 1;
-        // 
-        //                     if end_y.unwrap() == r.end_y {
-        //                         start_y = None;
-        //                         end_y = None;
-        //                     } else if end_y.unwrap() > r.end_y {
-        //                         start_y = Some(r.end_y + 1);
-        //                     }
-        //                 }
-        //             }
-        // 
-        //             if let Some(start_y_val) = start_y {
-        //                 let new_rect = Rectangle {
-        //                     start_x: x,
-        //                     start_y: start_y_val,
-        //                     end_x: x,
-        //                     end_y: end_y.unwrap(),
-        //                 };
-        //                 rectangles.push(new_rect);
-        // 
-        //                 start_y = None;
-        //                 end_y = None;
-        //             }
-        //         }
-        //     }
-        // 
-        //     if let Some(start_y_val) = start_y {
-        //         let new_rect = Rectangle {
-        //             start_x: x,
-        //             start_y: start_y_val,
-        //             end_x: x,
-        //             end_y: end_y.unwrap(),
-        //         };
-        //         rectangles.push(new_rect);
-        // 
-        //         start_y = None;
-        //         end_y = None;
-        //     }
-        // }
-
-        commands.entity(*parent).with_children(|parent| {
-            for r in rectangles {
-                let start_x = r.start_x as f32 * settings.tile_size;
-                let start_y = r.start_y as f32 * settings.tile_size;
-                let width = (r.end_x - r.start_x + 1) as f32 * settings.tile_size;
-                let height = (r.end_y - r.start_y + 1) as f32 * settings.tile_size;
-
-                let x = start_x + (width / 2.0);
-                let y = start_y + (height / 2.0);
-
-                // Dummy implementation of physics body and shape creation
-                let body = x; // Replace with actual body creation
-                let shape = (x, y, width, height); // Replace with actual shape creation
+        commands.with_children(|parent| {
+            for p in polygons.0 {
+                let vertices = p.exterior_coords_iter()
+                    .map(|p| Vec2::new(p.x, p.y))
+                    .collect::<Vec<_>>();
 
                 parent.spawn((
-                    Name::new("Solid"),
-                    SpriteBundle {
-                        transform: Transform::from_xyz(x, -y, 0.0),
-                        texture: settings.solid_texture.clone_weak(),
-                        ..default()
-                    },
-                    Collider::rectangle(width, height),
+                    Collider::polyline(vertices, None),
                     RigidBody::Static,
                 ));
             }
         });
+
+        // for polygon in polygons {
+            
+        // }
+
+        // commands.entity(*parent).with_children(|parent| {
+        //     for r in rectangles {
+        //         let start_x = r.start_x as f32 * settings.tile_size;
+        //         let start_y = r.start_y as f32 * settings.tile_size;
+        //         let width = (r.end_x - r.start_x + 1) as f32 * settings.tile_size;
+        //         let height = (r.end_y - r.start_y + 1) as f32 * settings.tile_size;
+        //
+        //         let x = start_x + (width / 2.0);
+        //         let y = start_y + (height / 2.0);
+        //
+        //         // Dummy implementation of physics body and shape creation
+        //         let body = x; // Replace with actual body creation
+        //         let shape = (x, y, width, height); // Replace with actual shape creation
+        //
+        //         parent.spawn((
+        //             Name::new("Solid"),
+        //             SpriteBundle {
+        //                 transform: Transform::from_xyz(x, -y, 0.0),
+        //                 texture: settings.solid_texture.clone_weak(),
+        //                 ..default()
+        //             },
+        //             Collider::rectangle(width, height),
+        //             RigidBody::Static,
+        //         ));
+        //     }
+        // });
 
 
         // for ((x, y), tile) in grid.0.iter() {
