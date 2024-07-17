@@ -1,9 +1,8 @@
 ﻿use std::fmt::{Display, Formatter};
 use bevy::prelude::{Reflect, Vec2};
 use geo::{LineString, Polygon};
-use image::{DynamicImage, GenericImageView, Pixel, Rgba};
+use image::{DynamicImage, GenericImageView, Rgba};
 use hex_literal::hex;
-use itertools::Itertools;
 use thiserror::Error;
 use crate::tileset::grid::Grid;
 

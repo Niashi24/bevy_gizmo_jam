@@ -64,6 +64,7 @@ impl ComputedStates for Paused {
 }
 
 #[derive(SubStates, Clone, Eq, PartialEq, Hash, Debug, Default)]
+#[allow(dead_code)]
 #[source(InGame = InGame)]
 pub enum GamePhase {
     #[default]

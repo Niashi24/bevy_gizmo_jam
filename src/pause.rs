@@ -46,7 +46,7 @@ fn spawn_pause_menu(
             ..default()
         }))
         .with_children(|parent| {
-            parent.spawn((
+            parent.spawn(
                 NodeBundle {
                     // border_radius: BorderRadius::
                     background_color: BackgroundColor(Color::linear_rgba(0.05, 0.05, 0.05, 0.8)),
@@ -61,7 +61,7 @@ fn spawn_pause_menu(
                     },
                     ..default()
                 }
-            ))
+            )
                 .with_children(|parent| {
                     parent.spawn((
                         TextBundle::from_section(
@@ -88,7 +88,7 @@ fn spawn_pause_menu(
                             ..default()
                         }
                     )).with_children(|parent| {
-                        parent.spawn((
+                        parent.spawn(
                             TextBundle::from_section(
                                 "Quit",
                                 TextStyle {
@@ -99,7 +99,7 @@ fn spawn_pause_menu(
                                 margin: UiRect::all(Val::Px(10.0)),
                                 ..default()
                             })
-                        ));
+                        );
                     });
                 });
         });

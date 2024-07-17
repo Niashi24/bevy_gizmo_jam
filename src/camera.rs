@@ -1,7 +1,5 @@
 ﻿use std::ops::{Add, Mul, Sub};
 use bevy::prelude::*;
-use crate::player::Player;
-use crate::tileset::load::TileGridAsset;
 
 pub struct CameraPlugin;
 

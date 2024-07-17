@@ -1,6 +1,9 @@
 ﻿use std::fmt::{Display, Formatter};
 use bevy::prelude::Reflect;
 
+
+
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Reflect)]
 pub struct Grid<T> {
     grid: Vec<Vec<T>>,
@@ -25,21 +28,25 @@ impl<T> Grid<T> {
     }
     
     #[inline]
+    #[allow(dead_code)]
     pub fn get_mut(&mut self, x: usize, y: usize) -> Option<&mut T> {
         self.grid.get_mut(y).and_then(|y| y.get_mut(x))
     }
-    
+
+    #[allow(dead_code)]
     pub fn get_i(&self, x: i64, y: i64) -> Option<&T> {
         if x < 0 || y < 0 { None }
         else { self.get(x as usize, y as usize) }
     }
-    
+
+    #[allow(dead_code)]
     pub fn get_cycle(&self, mut x: i64, mut y: i64) -> Option<&T> {
         x = x.rem_euclid(self.w as i64);
         y = y.rem_euclid(self.h as i64);
         self.get(x as usize, y as usize)
     }
-    
+
+    #[allow(dead_code)]
     pub fn positions<FN: Fn(&T) -> bool>(&self, predicate: FN) -> Vec<(usize, usize)> {
         let mut pos = vec![];
         for (y, row) in self.grid.iter().enumerate() {
@@ -51,7 +58,8 @@ impl<T> Grid<T> {
         }
         pos
     }
-    
+
+    #[allow(dead_code)]
     pub fn iter(&self) -> GridIter<T> {
         GridIter {
             grid: self,
@@ -59,11 +67,13 @@ impl<T> Grid<T> {
             y: 0,
         }
     }
-    
+
+    #[allow(dead_code)]
     pub fn map<X, FN: Fn(T) -> X>(self, func: FN) -> Grid<X> {
         self.grid.into_iter().map(|x| x.into_iter().map(|x| func(x))).collect()
     }
 
+    #[allow(dead_code)]
     pub fn try_from_iter<E, IT, TIT>(iter: TIT) -> Result<Self, (usize, usize, E)>
     where
         IT: IntoIterator<Item = Result<T, E>>,
