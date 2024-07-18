@@ -79,9 +79,38 @@ fn spawn_player_and_camera(
         pos.x += p_x as f32 * settings.tile_size;
         pos.y -= p_y as f32 * settings.tile_size;
 
-        let collider = Collider::round_rectangle(8.0, 2.0, 4.0);
-        let mut sensor = collider.clone();
-        sensor.scale_by(Vec2::new(1.2, 1.0), 1);
+        let radius = 6.0;
+        let collider = Collider::circle(radius);
+        let scale = 0.5;
+        let sensor = Collider::circle(radius * scale);
+        info!("{:?}", &collider);
+        info!("{:?}", &sensor);
+
+        // commands.spawn((
+        //     Name::new("Player"),
+        //     StateScoped(InGame),
+        //     Player,
+        //     PlayerStats {
+        //         speed: 128.0,
+        //         walk: TnuaBuiltinWalk {
+        //             float_height: 3.0,
+        //             acceleration: 256.0,
+        //             air_acceleration: 16.0,
+        //             ..default()
+        //         },
+        //     },
+        //     SpriteBundle {
+        //         transform: Transform::from_translation(pos),
+        //         texture: texture_assets.player.clone(),
+        //         ..default()
+        //     },
+        //     sensor.clone(),
+        //     TnuaAvian2dSensorShape(sensor.clone()),
+        //     TnuaControllerBundle::default(),
+        //     RigidBody::Dynamic,
+        //     LockedAxes::ROTATION_LOCKED,
+        //     Restitution::new(0.0).with_combine_rule(CoefficientCombine::Min),
+        // ));
 
         let player = commands
             .spawn((
@@ -91,7 +120,7 @@ fn spawn_player_and_camera(
                 PlayerStats {
                     speed: 128.0,
                     walk: TnuaBuiltinWalk {
-                        float_height: 3.0,
+                        float_height: 6.0,
                         acceleration: 256.0,
                         air_acceleration: 16.0,
                         ..default()

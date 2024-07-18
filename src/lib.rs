@@ -5,7 +5,7 @@ use bevy::app::App;
 #[cfg(debug_assertions)]
 use bevy::diagnostic::LogDiagnosticsPlugin;
 use bevy::prelude::*;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
+// use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_kira_audio::AudioPlugin;
 use bevy_tnua::prelude::TnuaControllerPlugin;
 use bevy_tnua_avian2d::TnuaAvian2dPlugin;
@@ -53,7 +53,7 @@ impl Plugin for GamePlugin {
             app.add_plugins((
                 // FrameTimeDiagnosticsPlugin,
                 LogDiagnosticsPlugin::default(),
-                WorldInspectorPlugin::default(),
+                // WorldInspectorPlugin::default(),
                 PhysicsDebugPlugin::default(),
             ));
         }

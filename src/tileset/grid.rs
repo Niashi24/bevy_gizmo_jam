@@ -108,9 +108,6 @@ impl<'a, T> Iterator for GridIter<'a, T> {
         if self.x == self.grid.w {
             self.y += 1;
             self.x = 0;
-            if self.y == self.grid.h {
-                return None;
-            }
         }
 
         item
