@@ -9,6 +9,7 @@ use bevy::prelude::*;
 use bevy_kira_audio::AudioPlugin;
 use bevy_tnua::prelude::TnuaControllerPlugin;
 use bevy_tnua_avian2d::TnuaAvian2dPlugin;
+use web::WebPlugin;
 
 use crate::camera::CameraPlugin;
 use crate::loading::LoadingPlugin;
@@ -26,6 +27,7 @@ mod pause;
 mod player;
 mod state;
 mod tileset;
+mod web;
 
 pub struct GamePlugin;
 
@@ -43,6 +45,7 @@ impl Plugin for GamePlugin {
             PausePlugin,
             TilePlugin,
             CameraPlugin,
+            WebPlugin,
         ))
         .add_systems(Update, log_app_state);
 
