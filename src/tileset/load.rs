@@ -192,7 +192,6 @@ pub fn spawn_background_tiles(
     mut tile_grid: EventReader<TileGridLoadEvent>,
 ) {
     for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
-
         let polygons = grid
             .0
             .iter()

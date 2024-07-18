@@ -79,9 +79,9 @@ fn spawn_player_and_camera(
         pos.x += p_x as f32 * settings.tile_size;
         pos.y -= p_y as f32 * settings.tile_size;
 
-        let collider = Collider::round_rectangle(8.0, 6.0, 4.0);
+        let collider = Collider::round_rectangle(8.0, 2.0, 4.0);
         let mut sensor = collider.clone();
-        sensor.scale_by(Vec2::new(0.95, 1.0), 1);
+        sensor.scale_by(Vec2::new(1.2, 1.0), 1);
 
         let player = commands
             .spawn((
@@ -91,7 +91,7 @@ fn spawn_player_and_camera(
                 PlayerStats {
                     speed: 128.0,
                     walk: TnuaBuiltinWalk {
-                        float_height: 4.0,
+                        float_height: 3.0,
                         acceleration: 256.0,
                         air_acceleration: 16.0,
                         ..default()
@@ -107,6 +107,7 @@ fn spawn_player_and_camera(
                 TnuaControllerBundle::default(),
                 RigidBody::Dynamic,
                 LockedAxes::ROTATION_LOCKED,
+                Restitution::new(0.0).with_combine_rule(CoefficientCombine::Min),
             ))
             .id();
 
@@ -143,8 +144,8 @@ fn move_player(
     input: Res<ButtonInput<KeyCode>>,
 ) {
     for (mut controller, stats) in player.iter_mut() {
-        let x = input.pressed(KeyCode::ArrowRight) as i32 as f32
-            - input.pressed(KeyCode::ArrowLeft) as i32 as f32;
+        let x = input.pressed(KeyCode::KeyD) as i32 as f32
+            - input.pressed(KeyCode::KeyA) as i32 as f32;
 
         controller.basis(TnuaBuiltinWalk {
             desired_forward: Vec3::X * x,
