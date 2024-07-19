@@ -180,17 +180,6 @@ fn divide_reduce<T>(list: Vec<T>, mut reduction: impl FnMut(T, T) -> T) -> Optio
             let (one, two) = (queue.pop_front().unwrap(), queue.pop_front().unwrap());
             queue.push_back(reduction(one, two));
         }
-
-
-        // loop {
-        //     match (list.pop(), list.pop()) {
-        //         (Some(one), Some(two)) => result.push(reduction(one, two)),
-        //         (Some(one), None) => result.push(one),
-        //         (None, _) => break,
-        //     }
-        // }
-
-        // std::mem::swap(&mut result, &mut list);
     }
 
     queue.pop_back()
@@ -231,6 +220,19 @@ pub fn spawn_background_tiles(
         let mut commands = commands.entity(colliders_parent);
 
         commands.with_children(|parent| {
+            // For whatever reason, you can phase through some of the triangles...
+            // use geo::TriangulateEarcut;
+            // for poly in polygons {
+            //     for tri in poly.earcut_triangles_iter() {
+            //         let [a, b, c] = tri.to_array()
+            //             .map(|v| Vec2::new(v.x, v.y));
+            //
+            //         parent.spawn((
+            //             Collider::triangle(a, b, c),
+            //             RigidBody::Static,
+            //         ));
+            //     }
+            // }
             for p in polygons.0 {
 
                 for tri in p.earcut_triangles_iter() {
@@ -240,8 +242,6 @@ pub fn spawn_background_tiles(
                         .map(|p| Vec2::new(p.x, p.y))
                         .map(|p| p - d);
 
-                    // info!("{:?} {:?} {:?}", c, a, b);
-
                     // Spawn triangle
                     parent.spawn((
                         Name::new("Triangle"),
@@ -250,6 +250,7 @@ pub fn spawn_background_tiles(
                         RigidBody::Static,
                     ));
                 }
+                
                 // let triangulation = p.earcut_triangles_raw();
                 // let indices = triangulation.triangle_indices
                 //     .chunks_exact(3)
@@ -259,23 +260,21 @@ pub fn spawn_background_tiles(
                 //     .chunks_exact(2)
                 //     .map(|c| Vec2::new(c[0], c[1]))
                 //     .collect::<Vec<_>>();
-
                 // parent.spawn((
                 //     Name::new("Polygon Collider"),
                 //     Collider::trimesh(vertices, indices),
                 //     CollisionMargin(1.0),
                 // ));
+                
                 // let vertices = p
                 //     .exterior_coords_iter()
                 //     .map(|p| Vec2::new(p.x, p.y))
                 //     .collect::<Vec<_>>();
-
                 // parent.spawn((
                 //     Name::new("Polygon Collider (Exterior)"),
                 //     Collider::polyline(vertices, None),
                 //     RigidBody::Static,
                 // ));
-
                 // for interior in p.interiors() {
                 //     let vertices = interior
                 //         .exterior_coords_iter()

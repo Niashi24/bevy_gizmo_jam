@@ -5,7 +5,7 @@ use bevy::app::App;
 #[cfg(debug_assertions)]
 use bevy::diagnostic::LogDiagnosticsPlugin;
 use bevy::prelude::*;
-// use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_kira_audio::AudioPlugin;
 use bevy_tnua::prelude::TnuaControllerPlugin;
 use bevy_tnua_avian2d::TnuaAvian2dPlugin;
@@ -14,6 +14,7 @@ use web::WebPlugin;
 use crate::camera::CameraPlugin;
 use crate::loading::LoadingPlugin;
 use crate::menu::MenuPlugin;
+use crate::mouse::MousePlugin;
 use crate::pause::PausePlugin;
 use crate::player::PlayerPlugin;
 use crate::state::{AppState, StatesPlugin};
@@ -28,6 +29,7 @@ mod player;
 mod state;
 mod tileset;
 mod web;
+mod mouse;
 
 pub struct GamePlugin;
 
@@ -46,6 +48,7 @@ impl Plugin for GamePlugin {
             TilePlugin,
             CameraPlugin,
             WebPlugin,
+            MousePlugin,
         ))
         .add_systems(Update, log_app_state);
 
@@ -56,7 +59,7 @@ impl Plugin for GamePlugin {
             app.add_plugins((
                 // FrameTimeDiagnosticsPlugin,
                 LogDiagnosticsPlugin::default(),
-                // WorldInspectorPlugin::default(),
+                WorldInspectorPlugin::default(),
                 PhysicsDebugPlugin::default(),
             ));
         }

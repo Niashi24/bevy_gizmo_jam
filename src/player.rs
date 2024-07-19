@@ -9,6 +9,7 @@ use bevy::prelude::*;
 use bevy::render::camera::ScalingMode;
 use bevy_tnua::prelude::{TnuaBuiltinWalk, TnuaController, TnuaControllerBundle};
 use bevy_tnua_avian2d::TnuaAvian2dSensorShape;
+use crate::web::{WebBundle, WebSource, WebState, WebStats};
 
 pub struct PlayerPlugin;
 
@@ -139,6 +140,9 @@ fn spawn_player_and_camera(
                 Restitution::new(0.0).with_combine_rule(CoefficientCombine::Min),
             ))
             .id();
+        
+        commands.entity(player)
+            .insert(DistanceJoint::new(player, player));
 
         // let bounds = CameraRegion2d(Rec)
         let mut bottom_right = grid_anchor.xy();
@@ -165,16 +169,31 @@ fn spawn_player_and_camera(
             CameraRegion2d(Rect::from_corners(grid_anchor.xy(), bottom_right)),
             CameraTarget(Some(player)),
         ));
+        
+        commands.spawn((
+            Name::new("Web"),
+            StateScoped(InGame),
+            WebBundle {
+                web_source: WebSource(player),
+                web_state: WebState::default(),
+                web_stats: WebStats {
+                    pull_force: 128.0,
+                    travel_speed: 128.0,
+                    radius: 2.0,
+                },
+            },
+            SpatialBundle::default(),
+        ));
     }
 }
 
-fn move_player(
+pub fn move_player(
     mut player: Query<(&mut TnuaController, &PlayerStats)>,
     input: Res<ButtonInput<KeyCode>>,
 ) {
     for (mut controller, stats) in player.iter_mut() {
-        let x = input.pressed(KeyCode::KeyD) as i32 as f32
-            - input.pressed(KeyCode::KeyA) as i32 as f32;
+        let x =
+            input.pressed(KeyCode::KeyD) as i32 as f32 - input.pressed(KeyCode::KeyA) as i32 as f32;
 
         controller.basis(TnuaBuiltinWalk {
             desired_forward: Vec3::X * x,
