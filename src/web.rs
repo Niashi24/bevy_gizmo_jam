@@ -40,7 +40,10 @@ pub struct WebBundle {
 }
 
 #[derive(Component, Debug, Reflect)]
-pub struct WebSource(pub Entity);
+pub struct WebSource {
+    pub player: Entity,
+    pub joint: Entity,
+}
 
 #[derive(Component, Default, Debug, Reflect, PartialEq, Copy, Clone)]
 pub enum WebState {
@@ -84,10 +87,10 @@ pub fn handle_input(
     let throw = mouse_input.any_pressed([MouseButton::Left, MouseButton::Right]);
 
     for (mut web_state, mut transform, source) in query.iter_mut() {
-        match *web_state {
+        match web_state.as_mut() {
             WebState::Idle => {
                 if throw {
-                    let cur = q_position.get(source.0).unwrap().translation();
+                    let cur = q_position.get(source.player).unwrap().translation();
                     transform.translation = cur;
                     let cur = cur.truncate();
                     let dir = (mouse_pos.0 - cur).try_normalize().unwrap_or(Vec2::X);
@@ -106,12 +109,8 @@ pub fn handle_input(
                     continue;
                 }
 
-                let new_state = match (pull, swing) {
-                    (true, true) => WebAttachState::Charge,
-                    (true, false) => WebAttachState::Pull,
-                    (false, true) => WebAttachState::Swing,
-                    (false, false) => WebAttachState::Fall,
-                };
+                *p_pull = pull;
+                *p_swing = swing;
 
                 // if new_state != *state {
                 //     *state = new_state;
@@ -123,6 +122,8 @@ pub fn handle_input(
 
 fn move_and_attach_web(
     mut query: Query<(&WebSource, &WebStats, &mut WebState, &mut Transform)>,
+    q_position: Query<&GlobalTransform>,
+    mut q_joint: Query<&mut DistanceJoint>,
     spatial_query: SpatialQuery,
     time: Res<Time>,
 ) {
@@ -138,12 +139,17 @@ fn move_and_attach_web(
             dir,
             time.delta_seconds() * stats.travel_speed,
             false,
-            SpatialQueryFilter::default().with_excluded_entities([source.0]),
+            SpatialQueryFilter::default().with_excluded_entities([source.player]),
         ) {
+            let mut joint = q_joint.get_mut(source.joint).unwrap();
+            let cur = q_position.get(hit.entity).unwrap().translation();
+            joint.rest_length = Vec3::distance(cur, transform.translation);
+            let offset = hit.point1 - cur.truncate();
+
             *state = WebState::Attached {
                 swing: false,
                 pull: false,
-                offset: hit.point1,
+                offset,
                 target: hit.entity,
             };
         } else {
@@ -158,10 +164,7 @@ fn keep_web_attached(
 ) {
     for (mut transform, source, state) in webs.iter_mut() {
         match state {
-            WebState::Idle => {
-                let target = position.get(source.0).unwrap().translation();
-                transform.translation = target;
-            }
+            WebState::Idle => {}
             WebState::Firing(_) => {}
             WebState::Attached { target, offset, .. } => {
                 let target = position.get(*target).unwrap().translation();
@@ -177,7 +180,7 @@ fn gizmos_web(
     pos: Query<&GlobalTransform>,
 ) {
     for (transform, stats, source, state) in query.iter() {
-        let source_pos = pos.get(source.0).unwrap();
+        let source_pos = pos.get(source.player).unwrap();
 
         gizmos.line_2d(
             transform.translation().truncate(),
@@ -214,16 +217,26 @@ fn handle_joint(
     positions: Query<&GlobalTransform>,
 ) {
     for (state, source) in web.iter() {
-        let mut joint = player.get_mut(source.0).unwrap();
+        let mut joint = player.get_mut(source.joint).unwrap();
         match *state {
             WebState::Idle | WebState::Firing(_) => {
-                joint.entity2 = joint.entity1;
+                joint.entity1 = joint.entity2;
             }
-            WebState::Attached { target, .. } => {
-                joint.entity2 = target;
-                let player_pos = positions.get(source.0).unwrap().translation();
+            WebState::Attached { target, pull, swing, offset } => {
+                joint.entity1 = target;
+                let player_pos = positions.get(source.player).unwrap().translation();
                 let target_pos = positions.get(target).unwrap().translation();
+                joint.local_anchor1 = offset;
                 joint.rest_length = Vec3::distance(player_pos, target_pos);
+                joint.length_limits = if swing {
+                    Some(DistanceLimit::new(0.0, joint.rest_length))
+                } else {
+                    Some(DistanceLimit::new(0.0, f32::INFINITY))
+                };
+
+                // joint.rest_length = 0.0;
+
+                info!("{:?} {:?}", joint.length_limits, joint.rest_length);
             }
         }
     }

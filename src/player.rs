@@ -4,12 +4,12 @@ use crate::state::{AppState, InGame, Paused};
 use crate::tileset;
 use crate::tileset::load::{TileGridBundle, TileGridLoadEvent, TileGridSettings};
 use crate::tileset::tile::Tile;
+use crate::web::{WebBundle, WebSource, WebState, WebStats};
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy::render::camera::ScalingMode;
 use bevy_tnua::prelude::{TnuaBuiltinWalk, TnuaController, TnuaControllerBundle};
 use bevy_tnua_avian2d::TnuaAvian2dSensorShape;
-use crate::web::{WebBundle, WebSource, WebState, WebStats};
 
 pub struct PlayerPlugin;
 
@@ -132,6 +132,7 @@ fn spawn_player_and_camera(
                     texture: texture_assets.player.clone(),
                     ..default()
                 },
+                MassPropertiesBundle::new_computed(&collider, 1.0),
                 collider,
                 TnuaAvian2dSensorShape(sensor),
                 TnuaControllerBundle::default(),
@@ -140,9 +141,6 @@ fn spawn_player_and_camera(
                 Restitution::new(0.0).with_combine_rule(CoefficientCombine::Min),
             ))
             .id();
-        
-        commands.entity(player)
-            .insert(DistanceJoint::new(player, player));
 
         // let bounds = CameraRegion2d(Rec)
         let mut bottom_right = grid_anchor.xy();
@@ -169,16 +167,26 @@ fn spawn_player_and_camera(
             CameraRegion2d(Rect::from_corners(grid_anchor.xy(), bottom_right)),
             CameraTarget(Some(player)),
         ));
-        
+
+        let joint = commands.spawn((
+            Name::new("Joint"),
+            StateScoped(InGame),
+            DistanceJoint::new(player, player)
+                .with_rest_length(100.0)
+                .with_linear_velocity_damping(0.1)
+                .with_angular_velocity_damping(1.0)
+                .with_compliance(0.00000001),
+        )).id();
+
         commands.spawn((
             Name::new("Web"),
             StateScoped(InGame),
             WebBundle {
-                web_source: WebSource(player),
+                web_source: WebSource { player, joint},
                 web_state: WebState::default(),
                 web_stats: WebStats {
                     pull_force: 128.0,
-                    travel_speed: 128.0,
+                    travel_speed: 640.0,
                     radius: 2.0,
                 },
             },
