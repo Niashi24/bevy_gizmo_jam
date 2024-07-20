@@ -21,11 +21,11 @@ pub struct CameraRegion2d(pub Rect);
 pub struct CameraTarget(pub Option<Entity>);
 
 pub fn follow_target(
-    mut query: Query<(&mut Transform, &CameraTarget, Option<&CameraRegion2d>)>,
+    mut query: Query<(&mut Transform, &CameraTarget, Option<&CameraRegion2d>, &OrthographicProjection)>,
     position: Query<&GlobalTransform>,
     time: Res<Time>,
 ) {
-    for (mut transform, target, region) in query.iter_mut() {
+    for (mut transform, target, region, ortho) in query.iter_mut() {
         let &CameraTarget(Some(entity)) = target else {
             continue;
         };
@@ -41,9 +41,24 @@ pub fn follow_target(
             time.delta_seconds(),
         );
 
-        if let Some(&CameraRegion2d(region)) = region {
-            target_pos.x = target_pos.x.clamp(region.min.x, region.max.x);
-            target_pos.y = target_pos.y.clamp(region.min.y, region.max.y);
+        if let Some(&CameraRegion2d(mut region)) = region {
+            region.min -= ortho.area.min;
+            region.max -= ortho.area.max;
+            
+            // target_pos.x = target_pos.x.max(region.min.x).min(region.max.x);
+            // target_pos.y = target_pos.y.max(region.min.y).min(region.max.y);
+            
+            target_pos.x = if region.min.x < region.max.x {
+                target_pos.x.clamp(region.min.x, region.max.x)
+            } else {
+                (region.min.x + region.max.x) / 2.0
+            };
+            target_pos.y = if region.min.y < region.max.y {
+                target_pos.y.clamp(region.min.y, region.max.y)
+            } else {
+                (region.min.y + region.max.y) / 2.0
+            };
+            // target_pos.y = target_pos.y.clamp(region.min.y, region.max.y);
         }
 
         transform.translation = target_pos.extend(transform.translation.z);

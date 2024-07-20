@@ -2,6 +2,7 @@ use avian2d::prelude::*;
 use bevy::color;
 use bevy::prelude::*;
 use crate::mouse::MouseCoords;
+use crate::state::GamePhase::InGame;
 use crate::state::Paused;
 
 pub struct WebPlugin;
@@ -42,7 +43,7 @@ pub struct WebBundle {
 #[derive(Component, Debug, Reflect)]
 pub struct WebSource {
     pub player: Entity,
-    pub joint: Entity,
+    pub joint: Option<Entity>,
 }
 
 #[derive(Component, Default, Debug, Reflect, PartialEq, Copy, Clone)]
@@ -123,7 +124,6 @@ pub fn handle_input(
 fn move_and_attach_web(
     mut query: Query<(&WebSource, &WebStats, &mut WebState, &mut Transform)>,
     q_position: Query<&GlobalTransform>,
-    mut q_joint: Query<&mut DistanceJoint>,
     spatial_query: SpatialQuery,
     time: Res<Time>,
 ) {
@@ -141,9 +141,7 @@ fn move_and_attach_web(
             false,
             SpatialQueryFilter::default().with_excluded_entities([source.player]),
         ) {
-            let mut joint = q_joint.get_mut(source.joint).unwrap();
             let cur = q_position.get(hit.entity).unwrap().translation();
-            joint.rest_length = Vec3::distance(cur, transform.translation);
             let offset = hit.point1 - cur.truncate();
 
             *state = WebState::Attached {
@@ -182,10 +180,6 @@ fn gizmos_web(
     for (transform, stats, source, state) in query.iter() {
         let source_pos = pos.get(source.player).unwrap();
 
-        gizmos.line_2d(
-            transform.translation().truncate(),
-            source_pos.translation().truncate(),
-            Color::linear_rgb(0., 1.0, 0.0));
 
         gizmos.circle_2d(
             transform.translation().truncate(),
@@ -197,7 +191,7 @@ fn gizmos_web(
             },
         );
 
-        match state {
+        match *state {
             WebState::Idle => {}
             WebState::Firing(dir) => {
                 gizmos.ray_2d(
@@ -206,37 +200,120 @@ fn gizmos_web(
                     Color::linear_rgb(0.0, 1.0, 1.0),
                 );
             }
-            WebState::Attached { .. } => {}
+            WebState::Attached { swing, pull, offset, target } => {
+                gizmos.line_2d(
+                    transform.translation().truncate(),
+                    source_pos.translation().truncate(),
+                    match (swing, pull) {
+                        (false, false) => Color::linear_rgb(0.0, 1.0, 0.0),
+                        (true, false) => Color::linear_rgb(1.0, 0.0, 0.0),
+                        (false, true) => Color::linear_rgb(0.0, 0.0, 1.0),
+                        (true, true) => Color::WHITE,
+                    });
+            }
         }
     }
 }
 
+fn spawn_joint(
+    commands: &mut Commands,
+    offset: Vec2,
+    player: Entity,
+    anchor: Entity,
+    distance: f32,
+) -> Entity {
+    commands.spawn((
+        Name::new("Joint"),
+        StateScoped(InGame),
+        DistanceJoint::new(player, anchor)
+            .with_local_anchor_2(offset)
+            .with_rest_length(distance)
+            .with_limits(0.0, distance)
+            .with_linear_velocity_damping(0.0)
+            .with_angular_velocity_damping(0.0)
+            .with_compliance(0.00000001),
+    )).id()
+}
+
 fn handle_joint(
-    mut player: Query<&mut DistanceJoint>,
-    web: Query<(&WebState, &WebSource), Changed<WebState>>,
+    mut q_joint: Query<&mut DistanceJoint>,
+    mut web: Query<(&WebState, &mut WebSource, &WebStats)>,
     positions: Query<&GlobalTransform>,
+    mut forces: Query<&mut ExternalImpulse>,
+    mut commands: Commands,
+    time: Res<Time>,
 ) {
-    for (state, source) in web.iter() {
-        let mut joint = player.get_mut(source.joint).unwrap();
+    for (state, mut source, stats) in web.iter_mut() {
+        // let mut joint = player.get_mut(source.joint).unwrap();
         match *state {
             WebState::Idle | WebState::Firing(_) => {
-                joint.entity1 = joint.entity2;
+                if let Some(joint) = source.joint.and_then(|e| commands.get_entity(e)) {
+                    joint.despawn_recursive();
+                }
             }
             WebState::Attached { target, pull, swing, offset } => {
-                joint.entity1 = target;
-                let player_pos = positions.get(source.player).unwrap().translation();
-                let target_pos = positions.get(target).unwrap().translation();
-                joint.local_anchor1 = offset;
-                joint.rest_length = Vec3::distance(player_pos, target_pos);
-                joint.length_limits = if swing {
-                    Some(DistanceLimit::new(0.0, joint.rest_length))
-                } else {
-                    Some(DistanceLimit::new(0.0, f32::INFINITY))
+                let p_1 = positions.get(source.player).unwrap().translation().truncate();
+                let p_2 = positions.get(target).unwrap().translation().truncate() + offset;
+                
+                match (swing, source.joint) {
+                    (true, None) => {                        
+                        let joint = spawn_joint(
+                            &mut commands,
+                            offset,
+                            source.player,
+                            target,
+                            Vec2::distance(p_1, p_2),
+                        );
+                        
+                        source.joint = Some(joint);
+                    }
+                    (true, Some(joint)) => {
+                        let mut joint = q_joint.get_mut(joint).unwrap();
+                        // handle distance
+                        joint.rest_length = Vec2::distance(p_1, p_2);
+                        joint.length_limits = Some(DistanceLimit::new(0.0, joint.rest_length));
+                        
+                    }
+                    (false, Some(joint)) => {
+                        if let Some(joint) = commands.get_entity(joint) {
+                            joint.despawn_recursive();
+                        }
+                        
+                        source.joint = None;
+                    }
+                    (false, None) => {}
                 };
+                
+                // handle pull
+                if pull {
+                    let mut player = forces.get_mut(source.player).unwrap();
+                    let a_to_b = (p_2 - p_1).normalize_or_zero();
+                    let applied = a_to_b * stats.pull_force * time.delta_seconds();
 
-                // joint.rest_length = 0.0;
+                    player.apply_impulse(applied);
 
-                info!("{:?} {:?}", joint.length_limits, joint.rest_length);
+                    if let Ok(mut anchor) = forces.get_mut(target) {
+                        anchor.apply_impulse_at_point(
+                            -applied,
+                            offset,
+                            Vec2::ZERO
+                        );
+                    }
+                }
+                // joint.entity1 = target;
+                // let player_pos = positions.get(source.player).unwrap().translation();
+                // let target_pos = positions.get(target).unwrap().translation();
+                // joint.local_anchor1 = offset;
+                // joint.rest_length = Vec3::distance(player_pos, target_pos);
+                // joint.length_limits = if swing {
+                //     Some(DistanceLimit::new(0.0, joint.rest_length))
+                // } else {
+                //     Some(DistanceLimit::new(0.0, f32::INFINITY))
+                // };
+                // 
+                // // joint.rest_length = 0.0;
+                // 
+                // info!("{:?} {:?}", joint.length_limits, joint.rest_length);
             }
         }
     }

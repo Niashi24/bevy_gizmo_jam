@@ -49,6 +49,6 @@ pub struct TextureAssets {
 
 #[derive(AssetCollection, Resource, Reflect)]
 pub struct Levels {
-    #[asset(path = "levels/test_level.png")]
+    #[asset(path = "levels/level_fast.png")]
     pub test_level: Handle<TileGridAsset>,
 }

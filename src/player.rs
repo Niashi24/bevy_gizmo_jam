@@ -25,7 +25,8 @@ impl Plugin for PlayerPlugin {
                     .run_if(not(in_state(AppState::Loading))),
                 move_player.run_if(in_state(Paused(false))),
             ),
-        );
+        )
+            .register_type::<PlayerWeb>();
         //     .add_systems(Update, move_player.run_if(in_state(Paused(false))));
     }
 }
@@ -36,8 +37,12 @@ pub struct Player;
 #[derive(Component, Clone)]
 pub struct PlayerStats {
     pub speed: f32,
+    pub air_multiplier: f32,
     pub walk: TnuaBuiltinWalk,
 }
+
+#[derive(Component, Copy, Clone, Debug, Reflect)]
+pub struct PlayerWeb(pub Entity);
 
 fn spawn_level(mut commands: Commands, assets: Res<TextureAssets>, levels: Res<Levels>) {
     commands.spawn((
@@ -82,36 +87,10 @@ fn spawn_player_and_camera(
 
         let radius = 6.0;
         let collider = Collider::circle(radius);
-        let scale = 0.5;
+        let scale = 0.9;
         let sensor = Collider::circle(radius * scale);
         info!("{:?}", &collider);
         info!("{:?}", &sensor);
-
-        // commands.spawn((
-        //     Name::new("Player"),
-        //     StateScoped(InGame),
-        //     Player,
-        //     PlayerStats {
-        //         speed: 128.0,
-        //         walk: TnuaBuiltinWalk {
-        //             float_height: 3.0,
-        //             acceleration: 256.0,
-        //             air_acceleration: 16.0,
-        //             ..default()
-        //         },
-        //     },
-        //     SpriteBundle {
-        //         transform: Transform::from_translation(pos),
-        //         texture: texture_assets.player.clone(),
-        //         ..default()
-        //     },
-        //     sensor.clone(),
-        //     TnuaAvian2dSensorShape(sensor.clone()),
-        //     TnuaControllerBundle::default(),
-        //     RigidBody::Dynamic,
-        //     LockedAxes::ROTATION_LOCKED,
-        //     Restitution::new(0.0).with_combine_rule(CoefficientCombine::Min),
-        // ));
 
         let player = commands
             .spawn((
@@ -120,10 +99,12 @@ fn spawn_player_and_camera(
                 Player,
                 PlayerStats {
                     speed: 128.0,
+                    air_multiplier: 0.5,
                     walk: TnuaBuiltinWalk {
                         float_height: 6.0,
                         acceleration: 256.0,
-                        air_acceleration: 16.0,
+                        air_acceleration: 0.0,
+                        cling_distance: 0.5,
                         ..default()
                     },
                 },
@@ -139,6 +120,7 @@ fn spawn_player_and_camera(
                 RigidBody::Dynamic,
                 LockedAxes::ROTATION_LOCKED,
                 Restitution::new(0.0).with_combine_rule(CoefficientCombine::Min),
+                // ExternalForce::new(Vec2::ZERO).with_persistence(false),
             ))
             .id();
 
@@ -152,6 +134,10 @@ fn spawn_player_and_camera(
         center.x += grid.0.w as f32 * settings.tile_size / 2.0;
         center.y -= grid.0.h as f32 * settings.tile_size / 2.0;
         center.z += 10.0;
+        
+        let mut rect = Rect::from_corners(grid_anchor.xy(), bottom_right);
+        rect.min += Vec2::new(-1.0, 1.0) * settings.tile_size / 2.0;
+        rect.max += Vec2::new(-1.0, 1.0) * settings.tile_size / 2.0;
 
         commands.spawn((
             Name::new("Camera"),
@@ -164,42 +150,48 @@ fn spawn_player_and_camera(
                 },
                 ..default()
             },
-            CameraRegion2d(Rect::from_corners(grid_anchor.xy(), bottom_right)),
+            CameraRegion2d(rect),
             CameraTarget(Some(player)),
         ));
 
-        let joint = commands.spawn((
-            Name::new("Joint"),
-            StateScoped(InGame),
-            DistanceJoint::new(player, player)
-                .with_rest_length(100.0)
-                .with_linear_velocity_damping(0.1)
-                .with_angular_velocity_damping(1.0)
-                .with_compliance(0.00000001),
-        )).id();
+        // let joint = commands.spawn((
+        //     Name::new("Joint"),
+        //     StateScoped(InGame),
+        //     DistanceJoint::new(player, player)
+        //         .with_rest_length(100.0)
+        //         .with_linear_velocity_damping(0.1)
+        //         .with_angular_velocity_damping(1.0)
+        //         .with_compliance(0.00000001),
+        // )).id();
 
-        commands.spawn((
+        let web = commands.spawn((
             Name::new("Web"),
             StateScoped(InGame),
             WebBundle {
-                web_source: WebSource { player, joint},
+                web_source: WebSource { player, joint: None},
                 web_state: WebState::default(),
                 web_stats: WebStats {
-                    pull_force: 128.0,
+                    pull_force: 128000.0,
                     travel_speed: 640.0,
                     radius: 2.0,
                 },
             },
             SpatialBundle::default(),
-        ));
+        )).id();
+        
+        commands.entity(player)
+            .insert(PlayerWeb(web));
     }
 }
 
 pub fn move_player(
-    mut player: Query<(&mut TnuaController, &PlayerStats)>,
+    mut player: Query<(&mut TnuaController, &mut LinearVelocity, &PlayerStats, &PlayerWeb, &GlobalTransform)>,
+    web: Query<&WebState>,
     input: Res<ButtonInput<KeyCode>>,
+    q_pos: Query<&GlobalTransform>,
+    time: Res<Time>,
 ) {
-    for (mut controller, stats) in player.iter_mut() {
+    for (mut controller, mut vel, stats, p_web, transform) in player.iter_mut() {
         let x =
             input.pressed(KeyCode::KeyD) as i32 as f32 - input.pressed(KeyCode::KeyA) as i32 as f32;
 
@@ -208,5 +200,21 @@ pub fn move_player(
             desired_velocity: Vec3::X * (x * stats.speed),
             ..stats.walk.clone()
         });
+        
+        if !controller.is_airborne().is_ok_and(|x| !x ) {
+            let web_state = web.get(p_web.0).unwrap();
+            match web_state {
+                WebState::Attached { target, offset, .. } => {
+                    let p_1 = transform.translation().truncate();
+                    let p_2 = q_pos.get(*target).unwrap().translation().truncate();
+                    
+                    let mut dir = (p_2 - p_1).normalize_or_zero();
+                    // rotate 90deg clockwise to get tangent
+                    dir = (Rot2::FRAC_PI_2.inverse()) * dir;
+                    vel.0 += dir * (time.delta_seconds() * x * stats.speed * stats.air_multiplier);
+                }
+                _ => {}
+            }
+        }
     }
 }
