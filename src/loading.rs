@@ -1,6 +1,7 @@
 use crate::state::AppState;
 use crate::tileset::load::TileGridAsset;
 use bevy::prelude::*;
+use bevy::utils::HashMap;
 use bevy_asset_loader::prelude::*;
 use bevy_kira_audio::AudioSource;
 
@@ -18,9 +19,9 @@ impl Plugin for LoadingPlugin {
                 .load_collection::<TextureAssets>()
                 .load_collection::<Levels>(),
         )
-        .register_type::<AudioAssets>()
-        .register_type::<TextureAssets>()
-        .register_type::<Levels>();
+            .register_type::<AudioAssets>()
+            .register_type::<TextureAssets>()
+            .register_type::<Levels>();
     }
 }
 
@@ -49,6 +50,11 @@ pub struct TextureAssets {
 
 #[derive(AssetCollection, Resource, Reflect)]
 pub struct Levels {
-    #[asset(path = "levels/level_fast.png")]
+    #[asset(path = "levels/level-fall.png")]
     pub test_level: Handle<TileGridAsset>,
+    #[asset(
+        paths("levels/level-fall.png", "levels/level_fast.png", "levels/test_level.png", ),
+        collection(typed, mapped)
+    )]
+    pub level_map: HashMap<String, Handle<TileGridAsset>>,
 }

@@ -238,6 +238,22 @@ pub fn spawn_background_tiles(
             
             for p in polygons.0 {
 
+                for tri in p.earcut_triangles_iter() {
+                    let (c_x, c_y) = tri.centroid().0.x_y();
+                    let d = Vec2::new(c_x, c_y);
+                    let [a, b, c] = tri.to_array()
+                        .map(|p| Vec2::new(p.x, p.y))
+                        .map(|p| p - d);
+
+                    // Spawn triangle
+                    parent.spawn((
+                        Name::new("Triangle"),
+                        Collider::triangle(a, b, c),
+                        SpatialBundle::from_transform(Transform::from_translation(d.extend(0.0))),
+                        RigidBody::Static,
+                    ));
+                }
+
                 // for tri in dddddd
                 
                 // let triangulation = p.earcut_triangles_raw();
@@ -255,28 +271,28 @@ pub fn spawn_background_tiles(
                 //     CollisionMargin(1.0),
                 // ));
                 
-                let vertices = p
-                    .exterior_coords_iter()
-                    .map(|p| Vec2::new(p.x, p.y))
-                    .collect::<Vec<_>>();
-                parent.spawn((
-                    Name::new("Polygon Collider (Exterior)"),
-                    Collider::polyline(vertices, None),
-                    RigidBody::Static,
-                    SpatialBundle::default(),
-                ));
-                for interior in p.interiors() {
-                    let vertices = interior
-                        .exterior_coords_iter()
-                        .map(|p| Vec2::new(p.x, p.y))
-                        .collect::<Vec<_>>();
-                    parent.spawn((
-                        Name::new("Polygon Collider (Interior)"),
-                        Collider::polyline(vertices, None),
-                        RigidBody::Static,
-                        SpatialBundle::default(),
-                    ));
-                }
+                // let vertices = p
+                //     .exterior_coords_iter()
+                //     .map(|p| Vec2::new(p.x, p.y))
+                //     .collect::<Vec<_>>();
+                // parent.spawn((
+                //     Name::new("Polygon Collider (Exterior)"),
+                //     Collider::polyline(vertices, None),
+                //     RigidBody::Static,
+                //     SpatialBundle::default(),
+                // ));
+                // for interior in p.interiors() {
+                //     let vertices = interior
+                //         .exterior_coords_iter()
+                //         .map(|p| Vec2::new(p.x, p.y))
+                //         .collect::<Vec<_>>();
+                //     parent.spawn((
+                //         Name::new("Polygon Collider (Interior)"),
+                //         Collider::polyline(vertices, None),
+                //         RigidBody::Static,
+                //         SpatialBundle::default(),
+                //     ));
+                // }
             }
         });
     }

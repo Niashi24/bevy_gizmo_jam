@@ -1,5 +1,6 @@
 use avian2d::prelude::*;
 use bevy::color;
+use bevy::color::palettes::css::RED;
 use bevy::prelude::*;
 use crate::mouse::MouseCoords;
 use crate::state::GamePhase::InGame;
@@ -50,7 +51,10 @@ pub struct WebSource {
 pub enum WebState {
     #[default]
     Idle,
-    Firing(Dir2),
+    Firing {
+        pos: Vec2,
+        dir: Dir2,
+    },
     Attached {
         swing: bool,
         pull: bool,
@@ -96,10 +100,13 @@ pub fn handle_input(
                     let cur = cur.truncate();
                     let dir = (mouse_pos.0 - cur).try_normalize().unwrap_or(Vec2::X);
 
-                    *web_state = WebState::Firing(Dir2::new_unchecked(dir));
+                    *web_state = WebState::Firing {
+                        pos: cur,
+                        dir: Dir2::new_unchecked(dir),
+                    };
                 }
             }
-            WebState::Firing(_) => {
+            WebState::Firing { .. } => {
                 if !throw {
                     *web_state = WebState::Idle;
                 }
@@ -128,15 +135,15 @@ fn move_and_attach_web(
     time: Res<Time>,
 ) {
     for (source, stats, mut state, mut transform) in query.iter_mut() {
-        let WebState::Firing(dir) = *state else {
+        let WebState::Firing { pos, dir } = state.as_mut() else {
             continue;
         };
 
         if let Some(hit) = spatial_query.cast_shape(
             &Collider::circle(stats.radius),
-            transform.translation.truncate(),
+            *pos,
             0.0,
-            dir,
+            *dir,
             time.delta_seconds() * stats.travel_speed,
             false,
             SpatialQueryFilter::default().with_excluded_entities([source.player]),
@@ -151,7 +158,9 @@ fn move_and_attach_web(
                 target: hit.entity,
             };
         } else {
-            transform.translation += dir.xy().extend(0.0) * (time.delta_seconds() * stats.travel_speed);
+            *pos += dir.xy() * (time.delta_seconds() * stats.travel_speed);
+            transform.translation.x = pos.x;
+            transform.translation.y = pos.y;
         }
     }
 }
@@ -163,7 +172,7 @@ fn keep_web_attached(
     for (mut transform, source, state) in webs.iter_mut() {
         match state {
             WebState::Idle => {}
-            WebState::Firing(_) => {}
+            WebState::Firing { .. } => {}
             WebState::Attached { target, offset, .. } => {
                 let target = position.get(*target).unwrap().translation();
                 transform.translation = target + offset.extend(0.0);
@@ -174,42 +183,40 @@ fn keep_web_attached(
 
 fn gizmos_web(
     mut gizmos: Gizmos,
-    query: Query<(&GlobalTransform, &WebStats, &WebSource, &WebState)>,
+    query: Query<(&WebStats, &WebSource, &WebState)>,
     pos: Query<&GlobalTransform>,
 ) {
-    for (transform, stats, source, state) in query.iter() {
+    for (stats, source, state) in query.iter() {
         let source_pos = pos.get(source.player).unwrap();
-
-
-        gizmos.circle_2d(
-            transform.translation().truncate(),
-            stats.radius,
-            match state {
-                WebState::Idle => Color::WHITE,
-                WebState::Firing(_) => Color::linear_rgb(0.0, 0.0, 0.0),
-                WebState::Attached { .. } => Color::linear_rgb(1.0, 0.0, 0.0),
-            },
-        );
 
         match *state {
             WebState::Idle => {}
-            WebState::Firing(dir) => {
+            WebState::Firing { pos, dir } => {
                 gizmos.ray_2d(
-                    transform.translation().truncate(),
+                    pos,
                     dir.xy() * stats.travel_speed,
                     Color::linear_rgb(0.0, 1.0, 1.0),
                 );
+                
+                gizmos.circle_2d(
+                    pos,
+                    stats.radius,
+                    Color::BLACK,
+                );
             }
             WebState::Attached { swing, pull, offset, target } => {
+                if swing {
+                    continue;
+                }
+                
                 gizmos.line_2d(
-                    transform.translation().truncate(),
                     source_pos.translation().truncate(),
-                    match (swing, pull) {
-                        (false, false) => Color::linear_rgb(0.0, 1.0, 0.0),
-                        (true, false) => Color::linear_rgb(1.0, 0.0, 0.0),
-                        (false, true) => Color::linear_rgb(0.0, 0.0, 1.0),
-                        (true, true) => Color::WHITE,
-                    });
+                    pos.get(target).unwrap().translation().truncate() + offset,
+                    match pull {
+                        true => color::palettes::basic::GREEN,
+                        false => color::palettes::basic::BLUE,
+                    }
+                )
             }
         }
     }
@@ -246,7 +253,7 @@ fn handle_joint(
     for (state, mut source, stats) in web.iter_mut() {
         // let mut joint = player.get_mut(source.joint).unwrap();
         match *state {
-            WebState::Idle | WebState::Firing(_) => {
+            WebState::Idle | WebState::Firing { .. } => {
                 if let Some(joint) = source.joint.and_then(|e| commands.get_entity(e)) {
                     joint.despawn_recursive();
                 }

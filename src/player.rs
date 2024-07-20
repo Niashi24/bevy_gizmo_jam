@@ -45,6 +45,8 @@ pub struct PlayerStats {
 pub struct PlayerWeb(pub Entity);
 
 fn spawn_level(mut commands: Commands, assets: Res<TextureAssets>, levels: Res<Levels>) {
+    
+    // dbg!(&levels.level_map);
     commands.spawn((
         Name::new("Tilemap"),
         StateScoped(InGame),
@@ -54,7 +56,7 @@ fn spawn_level(mut commands: Commands, assets: Res<TextureAssets>, levels: Res<L
                 ramp_texture: assets.ramp.clone(),
                 tile_size: 16.0,
             },
-            tile_grid: levels.test_level.clone(),
+            tile_grid: levels.level_map.get("levels/level-fall.png").unwrap().clone(),
             ..default()
         },
     ));
@@ -171,7 +173,7 @@ fn spawn_player_and_camera(
                 web_source: WebSource { player, joint: None},
                 web_state: WebState::default(),
                 web_stats: WebStats {
-                    pull_force: 128000.0,
+                    pull_force: 96000.0,
                     travel_speed: 640.0,
                     radius: 2.0,
                 },
