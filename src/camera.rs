@@ -8,7 +8,7 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<CameraRegion2d>()
             .register_type::<CameraTarget>()
-            .add_systems(Update, follow_target
+            .add_systems(PostUpdate, follow_target
                 .after(PhysicsSet::Sync)
                 .before(TransformSystem::TransformPropagate));
     }

@@ -6,6 +6,7 @@ use crate::tileset::load::{TileGridBundle, TileGridLoadEvent, TileGridSettings};
 use crate::tileset::tile::Tile;
 use crate::web::{WebBundle, WebSource, WebState, WebStats};
 use avian2d::prelude::*;
+use bevy::color::palettes::basic::WHITE;
 use bevy::prelude::*;
 use bevy::render::camera::ScalingMode;
 use bevy_tnua::prelude::{TnuaBuiltinWalk, TnuaController, TnuaControllerBundle};
@@ -56,7 +57,8 @@ fn spawn_level(mut commands: Commands, assets: Res<TextureAssets>, levels: Res<L
                 ramp_texture: assets.ramp.clone(),
                 tile_size: 16.0,
             },
-            tile_grid: levels.level_map.get("levels/level-fall.png").unwrap().clone(),
+            tile_grid: levels.main_level.clone(),
+            transform: Transform::from_xyz(0.0, 0.0, -10.0),
             ..default()
         },
     ));
@@ -71,8 +73,7 @@ fn spawn_player_and_camera(
     for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
         let grid_anchor = global_pos.get(*parent).unwrap().translation();
 
-        let Some((p_x, p_y)) = grid
-            .0
+        let Some((p_x, p_y)) = grid.grid
             .iter()
             .filter_map(|((x, y), item)| match item {
                 Tile::Player => Some((x, y)),
@@ -128,13 +129,13 @@ fn spawn_player_and_camera(
 
         // let bounds = CameraRegion2d(Rec)
         let mut bottom_right = grid_anchor.xy();
-        bottom_right.x += grid.0.w as f32 * settings.tile_size;
-        bottom_right.y -= grid.0.h as f32 * settings.tile_size;
+        bottom_right.x += grid.grid.w as f32 * settings.tile_size;
+        bottom_right.y -= grid.grid.h as f32 * settings.tile_size;
 
         let mut center = grid_anchor;
 
-        center.x += grid.0.w as f32 * settings.tile_size / 2.0;
-        center.y -= grid.0.h as f32 * settings.tile_size / 2.0;
+        center.x += grid.grid.w as f32 * settings.tile_size / 2.0;
+        center.y -= grid.grid.h as f32 * settings.tile_size / 2.0;
         center.z += 10.0;
         
         let mut rect = Rect::from_corners(grid_anchor.xy(), bottom_right);
@@ -176,6 +177,7 @@ fn spawn_player_and_camera(
                     pull_force: 96000.0,
                     travel_speed: 640.0,
                     radius: 2.0,
+                    max_travel_distance: 240.0,
                 },
             },
             SpatialBundle::default(),

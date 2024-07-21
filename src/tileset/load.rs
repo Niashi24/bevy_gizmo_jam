@@ -7,6 +7,7 @@ use bevy::prelude::*;
 use geo::{BooleanOps, Centroid, CoordsIter, MultiPolygon, Scale, Translate, TriangulateEarcut};
 use std::collections::VecDeque;
 use std::io;
+use itertools::Itertools;
 use thiserror::Error;
 
 #[test]
@@ -24,7 +25,52 @@ fn load_tilemap() -> io::Result<()> {
 }
 
 #[derive(Asset, Debug, Reflect, Clone)]
-pub struct TileGridAsset(pub Grid<Tile>);
+pub struct TileGridAsset {
+    pub grid: Grid<Tile>,
+    pub collider: Vec<([Vec2; 3], Vec2)>,
+}
+
+impl TileGridAsset {
+    pub fn new(grid: Grid<Tile>, tile_size: f32) -> Self {
+        let polygons = grid
+            .iter()
+            .flat_map(|((x, y), t)| {
+                t.to_collider_verts().map(|mut p| {
+                    p.translate_mut(
+                        x as f32 * tile_size,
+                        y as f32 * -tile_size,
+                    );
+                    p.scale_xy_mut(tile_size, tile_size);
+
+                    p
+                })
+            })
+            .map(|p| MultiPolygon::new(vec![p]))
+            .collect::<Vec<_>>();
+
+        let polygons =
+            divide_reduce(polygons, |a, b| a.union(&b))
+                .unwrap_or(MultiPolygon::new(vec![]));
+        
+        let tris = polygons.into_iter()
+            .flat_map(|x| x.earcut_triangles_iter())
+            .map(|tri| {
+                let (c_x, c_y) = tri.centroid().0.x_y();
+                let d = Vec2::new(c_x, c_y);
+                let tri = tri.to_array()
+                    .map(|p| Vec2::new(p.x, p.y))
+                    .map(|p| p - d);
+
+                (tri, d)
+            })
+            .collect_vec();
+        
+        Self {
+            grid,
+            collider: tris,
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct TileGridAssetLoader;
@@ -57,10 +103,11 @@ impl AssetLoader for TileGridAssetLoader {
 
         let grid = (&img).try_into()?;
         
-        println!("{}", grid);
-        Ok(TileGridAsset(grid))
+        // println!("{}", grid);
+        Ok(TileGridAsset::new(grid, 16.0))
     }
 }
+
 
 #[derive(Component, Default, Clone)]
 pub struct TileGridSettings {
@@ -117,7 +164,7 @@ pub(crate) fn spawn_grid(
     }
 }
 
-pub fn spawn_ramps(mut commands: Commands, mut tile_grid: EventReader<TileGridLoadEvent>) {
+pub fn spawn_ramps(mut commands: Commands, mut tile_grid: EventReader<TileGridLoadEvent>, mut asset_server: ResMut<AssetServer>) {
     for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
         let colliders_parent = commands
             .spawn_empty()
@@ -127,7 +174,7 @@ pub fn spawn_ramps(mut commands: Commands, mut tile_grid: EventReader<TileGridLo
         commands.entity(*parent).add_child(colliders_parent);
         let mut commands = commands.entity(colliders_parent);
 
-        for ((x, y), tile) in grid.0.iter() {
+        for ((x, y), tile) in grid.grid.iter() {
             let x = x as f32 * settings.tile_size;
             let y = y as f32 * settings.tile_size;
 
@@ -166,11 +213,27 @@ pub fn spawn_ramps(mut commands: Commands, mut tile_grid: EventReader<TileGridLo
                         },
                     ));
                 }
+                Tile::Goal => {
+                    parent.spawn((
+                        Name::new("Goal"),
+                        SpriteBundle {
+                            transform,
+                            texture: asset_server.load("textures/goal.png"),
+                            ..default()
+                        },
+                        Goal,
+                        Collider::rectangle(settings.tile_size, settings.tile_size),
+                        Sensor,
+                    ));
+                }
                 _ => {}
             });
         }
     }
 }
+
+#[derive(Component)]
+struct Goal;
 
 fn divide_reduce<T>(list: Vec<T>, mut reduction: impl FnMut(T, T) -> T) -> Option<T> {
     let mut queue = VecDeque::from(list);
@@ -190,109 +253,16 @@ pub fn spawn_background_tiles(
     mut tile_grid: EventReader<TileGridLoadEvent>,
 ) {
     for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
-        let polygons = grid
-            .0
-            .iter()
-            .flat_map(|((x, y), t)| {
-                t.to_collider_verts().map(|mut p| {
-                    p.translate_mut(
-                        x as f32 * settings.tile_size,
-                        y as f32 * -settings.tile_size,
-                    );
-                    p.scale_xy_mut(settings.tile_size, settings.tile_size);
 
-                    p
-                })
-            })
-            .map(|p| MultiPolygon::new(vec![p]))
-            .collect::<Vec<_>>();
-
-        let polygons =
-            divide_reduce(polygons, |a, b| a.union(&b))
-            .unwrap_or(MultiPolygon::new(vec![]));
-
-        let colliders_parent = commands
-            .spawn_empty()
-            .insert(Name::new("Background Colliders"))
-            .insert(SpatialBundle::default())
-            .id();
-        commands.entity(*parent).add_child(colliders_parent);
-        let mut commands = commands.entity(colliders_parent);
-
-        commands.with_children(|parent| {
-            // For whatever reason, you can phase through some of the triangles...
-            // use geo::TriangulateEarcut;
-            // for poly in polygons {
-            //     for tri in poly.earcut_triangles_iter() {
-            //         let [a, b, c] = tri.to_array()
-            //             .map(|v| Vec2::new(v.x, v.y));
-            //
-            //         parent.spawn((
-            //             Collider::triangle(a, b, c),
-            //             RigidBody::Static,
-            //         ));
-            //     }
-            // }
-            
-            
-            
-            for p in polygons.0 {
-
-                for tri in p.earcut_triangles_iter() {
-                    let (c_x, c_y) = tri.centroid().0.x_y();
-                    let d = Vec2::new(c_x, c_y);
-                    let [a, b, c] = tri.to_array()
-                        .map(|p| Vec2::new(p.x, p.y))
-                        .map(|p| p - d);
-
-                    // Spawn triangle
-                    parent.spawn((
-                        Name::new("Triangle"),
-                        Collider::triangle(a, b, c),
-                        SpatialBundle::from_transform(Transform::from_translation(d.extend(0.0))),
-                        RigidBody::Static,
-                    ));
-                }
-
-                // for tri in dddddd
-                
-                // let triangulation = p.earcut_triangles_raw();
-                // let indices = triangulation.triangle_indices
-                //     .chunks_exact(3)
-                //     .map(|c| [c[0] as u32, c[1] as u32, c[2] as u32])
-                //     .collect::<Vec<_>>();
-                // let vertices = triangulation.vertices
-                //     .chunks_exact(2)
-                //     .map(|c| Vec2::new(c[0], c[1]))
-                //     .collect::<Vec<_>>();
-                // parent.spawn((
-                //     Name::new("Polygon Collider"),
-                //     Collider::trimesh(vertices, indices),
-                //     CollisionMargin(1.0),
-                // ));
-                
-                // let vertices = p
-                //     .exterior_coords_iter()
-                //     .map(|p| Vec2::new(p.x, p.y))
-                //     .collect::<Vec<_>>();
-                // parent.spawn((
-                //     Name::new("Polygon Collider (Exterior)"),
-                //     Collider::polyline(vertices, None),
-                //     RigidBody::Static,
-                //     SpatialBundle::default(),
-                // ));
-                // for interior in p.interiors() {
-                //     let vertices = interior
-                //         .exterior_coords_iter()
-                //         .map(|p| Vec2::new(p.x, p.y))
-                //         .collect::<Vec<_>>();
-                //     parent.spawn((
-                //         Name::new("Polygon Collider (Interior)"),
-                //         Collider::polyline(vertices, None),
-                //         RigidBody::Static,
-                //         SpatialBundle::default(),
-                //     ));
-                // }
+        commands.entity(*parent).with_children(|parent| {
+            for ([a, b, c], centroid) in grid.collider.iter().copied() {
+                // Spawn triangle
+                parent.spawn((
+                    Name::new("Triangle"),
+                    Collider::triangle(a, b, c),
+                    SpatialBundle::from_transform(Transform::from_translation(centroid.extend(0.0))),
+                    RigidBody::Static,
+                ));
             }
         });
     }

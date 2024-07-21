@@ -2,6 +2,7 @@ use avian2d::prelude::*;
 use bevy::color;
 use bevy::color::palettes::css::RED;
 use bevy::prelude::*;
+use bevy::prelude::TransformSystem::TransformPropagate;
 use crate::mouse::MouseCoords;
 use crate::state::GamePhase::InGame;
 use crate::state::Paused;
@@ -28,13 +29,19 @@ impl Plugin for WebPlugin {
                      ),
                      handle_joint,
                  ).chain().in_set(WebSystemSet),
-                 gizmos_web,
+                 // gizmos_web,
                 ))
+            .insert_gizmo_config(WebGizmos, GizmoConfig {
+                line_width: 6.0,
+                ..default()
+            })
+            .add_event::<WebAttachEvent>()
+            .add_systems(PostUpdate, animate_web.in_set(WebSystemSet).after(TransformPropagate))
             .configure_sets(Update, WebSystemSet.run_if(in_state(Paused(false))));
     }
 }
 
-#[derive(Bundle, Debug)]
+#[derive(Bundle)]
 pub struct WebBundle {
     pub web_source: WebSource,
     pub web_state: WebState,
@@ -73,12 +80,19 @@ pub enum WebAttachState {
     Charge,
 }
 
+#[derive(Default, Reflect, GizmoConfigGroup)]
+pub struct WebGizmos;
+
 #[derive(Component, Debug, Reflect, PartialEq, Copy, Clone)]
 pub struct WebStats {
     pub pull_force: f32,
     pub travel_speed: f32,
     pub radius: f32,
+    pub max_travel_distance: f32,
 }
+
+#[derive(Event, Debug)]
+pub struct WebAttachEvent(pub Entity);
 
 pub fn handle_input(
     mut query: Query<(&mut WebState, &mut Transform, &WebSource)>,
@@ -90,11 +104,12 @@ pub fn handle_input(
     let pull = key_input.pressed(KeyCode::Space);
     let swing = key_input.pressed(KeyCode::ShiftLeft);
     let throw = mouse_input.any_pressed([MouseButton::Left, MouseButton::Right]);
+    let just_throw = mouse_input.any_just_pressed([MouseButton::Left, MouseButton::Right]);
 
     for (mut web_state, mut transform, source) in query.iter_mut() {
         match web_state.as_mut() {
             WebState::Idle => {
-                if throw {
+                if just_throw {
                     let cur = q_position.get(source.player).unwrap().translation();
                     transform.translation = cur;
                     let cur = cur.truncate();
@@ -133,18 +148,26 @@ fn move_and_attach_web(
     q_position: Query<&GlobalTransform>,
     spatial_query: SpatialQuery,
     time: Res<Time>,
+    mut attach_event: EventWriter<WebAttachEvent>,
 ) {
     for (source, stats, mut state, mut transform) in query.iter_mut() {
         let WebState::Firing { pos, dir } = state.as_mut() else {
             continue;
         };
+        
+        let source_pos = q_position.get(source.player).unwrap().translation().truncate();
+        let distance = pos.distance(source_pos);
+        if distance > stats.max_travel_distance {
+            *state = WebState::Idle;
+            continue;
+        }        
 
         if let Some(hit) = spatial_query.cast_shape(
             &Collider::circle(stats.radius),
             *pos,
             0.0,
             *dir,
-            time.delta_seconds() * stats.travel_speed,
+            (time.delta_seconds() * stats.travel_speed).min(stats.max_travel_distance - distance),
             false,
             SpatialQueryFilter::default().with_excluded_entities([source.player]),
         ) {
@@ -157,8 +180,11 @@ fn move_and_attach_web(
                 offset,
                 target: hit.entity,
             };
+            
+            attach_event.send(WebAttachEvent(hit.entity));
         } else {
-            *pos += dir.xy() * (time.delta_seconds() * stats.travel_speed);
+            let translation = dir.xy() * (time.delta_seconds() * stats.travel_speed);
+            *pos += translation;
             transform.translation.x = pos.x;
             transform.translation.y = pos.y;
         }
@@ -191,13 +217,13 @@ fn gizmos_web(
 
         match *state {
             WebState::Idle => {}
-            WebState::Firing { pos, dir } => {
+            WebState::Firing { pos, dir, .. } => {
                 gizmos.ray_2d(
                     pos,
                     dir.xy() * stats.travel_speed,
                     Color::linear_rgb(0.0, 1.0, 1.0),
                 );
-                
+
                 gizmos.circle_2d(
                     pos,
                     stats.radius,
@@ -208,14 +234,14 @@ fn gizmos_web(
                 if swing {
                     continue;
                 }
-                
+
                 gizmos.line_2d(
                     source_pos.translation().truncate(),
                     pos.get(target).unwrap().translation().truncate() + offset,
                     match pull {
                         true => color::palettes::basic::GREEN,
                         false => color::palettes::basic::BLUE,
-                    }
+                    },
                 )
             }
         }
@@ -261,9 +287,9 @@ fn handle_joint(
             WebState::Attached { target, pull, swing, offset } => {
                 let p_1 = positions.get(source.player).unwrap().translation().truncate();
                 let p_2 = positions.get(target).unwrap().translation().truncate() + offset;
-                
+
                 match (swing, source.joint) {
-                    (true, None) => {                        
+                    (true, None) => {
                         let joint = spawn_joint(
                             &mut commands,
                             offset,
@@ -271,7 +297,7 @@ fn handle_joint(
                             target,
                             Vec2::distance(p_1, p_2),
                         );
-                        
+
                         source.joint = Some(joint);
                     }
                     (true, Some(joint)) => {
@@ -279,18 +305,17 @@ fn handle_joint(
                         // handle distance
                         joint.rest_length = Vec2::distance(p_1, p_2);
                         joint.length_limits = Some(DistanceLimit::new(0.0, joint.rest_length));
-                        
                     }
                     (false, Some(joint)) => {
                         if let Some(joint) = commands.get_entity(joint) {
                             joint.despawn_recursive();
                         }
-                        
+
                         source.joint = None;
                     }
                     (false, None) => {}
                 };
-                
+
                 // handle pull
                 if pull {
                     let mut player = forces.get_mut(source.player).unwrap();
@@ -303,27 +328,48 @@ fn handle_joint(
                         anchor.apply_impulse_at_point(
                             -applied,
                             offset,
-                            Vec2::ZERO
+                            Vec2::ZERO,
                         );
                     }
                 }
-                // joint.entity1 = target;
-                // let player_pos = positions.get(source.player).unwrap().translation();
-                // let target_pos = positions.get(target).unwrap().translation();
-                // joint.local_anchor1 = offset;
-                // joint.rest_length = Vec3::distance(player_pos, target_pos);
-                // joint.length_limits = if swing {
-                //     Some(DistanceLimit::new(0.0, joint.rest_length))
-                // } else {
-                //     Some(DistanceLimit::new(0.0, f32::INFINITY))
-                // };
-                // 
-                // // joint.rest_length = 0.0;
-                // 
-                // info!("{:?} {:?}", joint.length_limits, joint.rest_length);
             }
         }
     }
 }
 
-fn animate_web() {}
+fn animate_web(
+    mut web: Query<(&WebState, &WebSource, &GlobalTransform)>,
+    q_pos: Query<&GlobalTransform>,
+    mut gizmos: Gizmos<WebGizmos>,
+) {
+    for (state, source, transform) in web.iter_mut() {
+        
+        if matches!(state, WebState::Idle) {
+            continue;
+        }
+        
+        let color = match state {
+            WebState::Idle | WebState::Firing { .. } => color::palettes::tailwind::GRAY_300,
+            WebState::Attached { swing, pull, .. } => {
+                match (*swing, *pull) {
+                    (false, false) => color::palettes::tailwind::GRAY_300,
+                    (true, false) => color::palettes::tailwind::GRAY_400,
+                    (false, true) => color::palettes::tailwind::GRAY_500,
+                    (true, true) => color::palettes::tailwind::GRAY_600,
+                }
+            }
+        };
+        
+        let source_pos = q_pos.get(source.player).unwrap().translation().truncate();
+        
+        gizmos.line_2d(
+            transform.translation().truncate(),
+            source_pos,
+            color
+        );
+        
+        gizmos.circle_2d(transform.translation().truncate(), 1.0, color);
+        gizmos.circle_2d(source_pos, 1.0, color);
+        
+    }
+}

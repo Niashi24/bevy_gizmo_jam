@@ -5,7 +5,7 @@ use bevy::app::App;
 #[cfg(debug_assertions)]
 use bevy::diagnostic::LogDiagnosticsPlugin;
 use bevy::prelude::*;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
+// use bevy_inspector_egui::quick::{AssetInspectorPlugin, StateInspectorPlugin, WorldInspectorPlugin};
 use bevy_kira_audio::AudioPlugin;
 use bevy_tnua::prelude::TnuaControllerPlugin;
 use bevy_tnua_avian2d::TnuaAvian2dPlugin;
@@ -49,8 +49,7 @@ impl Plugin for GamePlugin {
             CameraPlugin,
             WebPlugin,
             MousePlugin,
-        ))
-        .add_systems(Update, log_app_state);
+        ));
 
         app.insert_resource::<Gravity>(Gravity(Vec2::Y * -160.0));
 
@@ -59,15 +58,11 @@ impl Plugin for GamePlugin {
             app.add_plugins((
                 // FrameTimeDiagnosticsPlugin,
                 LogDiagnosticsPlugin::default(),
-                WorldInspectorPlugin::default(),
                 PhysicsDebugPlugin::default(),
+                
+
+                // WorldInspectorPlugin::default(),
             ));
         }
-    }
-}
-
-fn log_app_state(state: Res<State<AppState>>) {
-    if state.is_changed() {
-        // dbg!(state.get());
     }
 }

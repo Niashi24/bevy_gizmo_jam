@@ -50,11 +50,11 @@ pub struct TextureAssets {
 
 #[derive(AssetCollection, Resource, Reflect)]
 pub struct Levels {
-    #[asset(path = "levels/level-fall.png")]
-    pub test_level: Handle<TileGridAsset>,
+    #[asset(path = "levels/main-level.png")]
+    pub main_level: Handle<TileGridAsset>,
     #[asset(
         paths("levels/level-fall.png", "levels/level_fast.png", "levels/test_level.png", ),
-        collection(typed, mapped)
+        collection(typed)
     )]
-    pub level_map: HashMap<String, Handle<TileGridAsset>>,
+    pub level_map: Vec<Handle<TileGridAsset>>,
 }

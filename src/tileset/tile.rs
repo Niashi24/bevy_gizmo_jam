@@ -11,6 +11,8 @@ pub enum Tile {
     Solid,
     Air,
     Player,
+    Goal,
+    Key,
     Ramp(RampOrientation),
 }
 
@@ -32,8 +34,7 @@ impl Tile {
                 tri.push(tri[0]);
                 Some(Polygon::new(LineString::from(tri), vec![]))
             }
-            Tile::Air => None,
-            Tile::Player => None,
+            _ => None,
         }
     }
 }
@@ -72,6 +73,8 @@ impl TryFrom<Rgba<u8>> for Tile {
         const SW: [u8; 4] = hex!("eebf80ff");
         const PLAYER: [u8; 4] = [255, 0, 0, 255];
         const SOLID: [u8; 4] = hex!("000000ff");
+        const GOAL: [u8; 4] = hex!("800080ff");
+        const KEY: [u8; 4] = hex!("bfee80ff");
 
         match value {
             Rgba(NW) => Ok(Tile::Ramp(RampOrientation::NW)),
@@ -80,6 +83,8 @@ impl TryFrom<Rgba<u8>> for Tile {
             Rgba(SW) => Ok(Tile::Ramp(RampOrientation::SW)),
             Rgba(SOLID) => Ok(Tile::Solid),
             Rgba(PLAYER) => Ok(Tile::Player),
+            Rgba(GOAL) => Ok(Tile::Goal),
+            Rgba(KEY) => Ok(Tile::Key),
             Rgba([_, _, _, 0]) => Ok(Tile::Air),
             _ => Err(UnknownPixel(value)),
         }
@@ -111,7 +116,9 @@ impl Display for Tile {
                 Tile::Solid => '■'.to_string(),
                 Tile::Air => ' '.to_string(),
                 Tile::Ramp(x) => x.to_string(),
-                Tile::Player => '🏃'.to_string(),
+                Tile::Player => '@'.to_string(),
+                Tile::Key => '$'.to_string(),
+                Tile::Goal => '0'.to_string()
             }
         )
     }
