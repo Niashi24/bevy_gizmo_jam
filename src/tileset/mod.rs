@@ -17,7 +17,7 @@ impl Plugin for TilePlugin {
             .add_event::<TileGridLoadEvent>()
             .add_systems(
                 Update,
-                (spawn_grid, (spawn_background_tiles, spawn_ramps))
+                (spawn_grid, (spawn_colliders, spawn_ramps))
                     .chain()
                     .run_if(in_state(InGame)),
             );

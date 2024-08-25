@@ -4,25 +4,12 @@ use avian2d::prelude::*;
 use bevy::asset::io::Reader;
 use bevy::asset::{AssetLoader, AsyncReadExt, LoadContext};
 use bevy::prelude::*;
-use geo::{BooleanOps, Centroid, CoordsIter, MultiPolygon, Scale, Translate, TriangulateEarcut};
+use geo::{BooleanOps, Centroid, Coord, CoordsIter, LineString, MultiPolygon, Scale, Translate, TriangulateEarcut, TriangulateSpade, Vector2DOps};
 use std::collections::VecDeque;
 use std::io;
+use geo::triangulate_spade::SpadeTriangulationConfig;
 use itertools::Itertools;
 use thiserror::Error;
-
-#[test]
-fn load_tilemap() -> io::Result<()> {
-    let grid: Grid<Tile> = (&image::io::Reader::open("assets/levels/test_level.png")
-        .unwrap()
-        .decode()
-        .unwrap())
-        .try_into()
-        .unwrap();
-
-    println!("{}", grid);
-
-    Ok(())
-}
 
 #[derive(Asset, Debug, Reflect, Clone)]
 pub struct TileGridAsset {
@@ -32,28 +19,11 @@ pub struct TileGridAsset {
 
 impl TileGridAsset {
     pub fn new(grid: Grid<Tile>, tile_size: f32) -> Self {
-        let polygons = grid
-            .iter()
-            .flat_map(|((x, y), t)| {
-                t.to_collider_verts().map(|mut p| {
-                    p.translate_mut(
-                        x as f32 * tile_size,
-                        y as f32 * -tile_size,
-                    );
-                    p.scale_xy_mut(tile_size, tile_size);
+        let polygons = grid_to_polys(&grid, tile_size);
 
-                    p
-                })
-            })
-            .map(|p| MultiPolygon::new(vec![p]))
-            .collect::<Vec<_>>();
-
-        let polygons =
-            divide_reduce(polygons, |a, b| a.union(&b))
-                .unwrap_or(MultiPolygon::new(vec![]));
-        
-        let tris = polygons.into_iter()
-            .flat_map(|x| x.earcut_triangles_iter())
+        let tris = 
+        polygons.constrained_triangulation(SpadeTriangulationConfig::default()).unwrap()
+            .into_iter()
             .map(|tri| {
                 let (c_x, c_y) = tri.centroid().0.x_y();
                 let d = Vec2::new(c_x, c_y);
@@ -64,13 +34,79 @@ impl TileGridAsset {
                 (tri, d)
             })
             .collect_vec();
-        
+
         Self {
             grid,
             collider: tris,
         }
     }
 }
+
+fn removed_in_line(line: &geo::LineString<f32>) -> geo::LineString<f32> {
+    if line.coords_count() < 3 { return line.clone(); }
+    
+    let mut points = line.coords().copied();
+    let (mut a, mut b) = points.next_tuple().unwrap();
+    let mut kept = vec![];
+    
+    fn along_path(a: Coord<f32>, b: Coord<f32>, c: Coord<f32>) -> bool {
+        let dir_1 = (c - b).try_normalize().unwrap_or_default();
+        let dir_2 = (b - a).try_normalize().unwrap_or_default();
+        dir_1.dot_product(dir_2) >= 0.9995
+    }
+    // maybe add first one
+    {
+        let mut coords = line.coords().copied();
+        let b = coords.next().unwrap();
+        let c = coords.next().unwrap();
+        let _ = coords.next_back().unwrap();  // last coord is a duplicate
+        let a = coords.next_back().unwrap();
+        if !along_path(a, b, c) {
+            kept.push(b);
+        }
+    }
+    
+    for p in points {
+        if !along_path(a, b, p) {
+            kept.push(b);
+        }
+        (a, b) = (b, p);
+    }
+    LineString::<f32>::new(kept)
+}
+
+pub fn grid_to_polys(grid: &Grid<Tile>, tile_size: f32) -> geo::MultiPolygon<f32> {
+    let polygons = grid
+        .iter()
+        .flat_map(|((x, y), t)| {
+            t.to_collider_verts().map(|mut p| {
+                p.translate_mut(
+                    x as f32 * tile_size,
+                    y as f32 * -tile_size,
+                );
+                p.scale_xy_mut(tile_size, tile_size);
+
+                p
+            })
+        })
+        .map(|p| MultiPolygon::new(vec![p]))
+        .collect::<Vec<_>>();
+
+    let polys = divide_reduce(polygons, |a, b| a.union(&b))
+        .unwrap_or(MultiPolygon::new(vec![]));
+    
+    polys.into_iter()
+        .map(|p| {
+            geo::Polygon::new(
+                removed_in_line(p.exterior()),
+                p.interiors().into_iter()
+                    .map(removed_in_line)
+                    .collect()
+            )
+        })
+        .collect()
+}
+// fn spawn_polygon(polygon: MultiPolygon)
 
 #[derive(Default)]
 pub struct TileGridAssetLoader;
@@ -102,7 +138,7 @@ impl AssetLoader for TileGridAssetLoader {
         let img = image::load_from_memory(bytes.as_slice())?;
 
         let grid = (&img).try_into()?;
-        
+
         // println!("{}", grid);
         Ok(TileGridAsset::new(grid, 16.0))
     }
@@ -248,13 +284,38 @@ fn divide_reduce<T>(list: Vec<T>, mut reduction: impl FnMut(T, T) -> T) -> Optio
     queue.pop_back()
 }
 
-pub fn spawn_background_tiles(
+pub fn spawn_colliders(
     mut commands: Commands,
     mut tile_grid: EventReader<TileGridLoadEvent>,
 ) {
-    for TileGridLoadEvent(grid, settings, parent) in tile_grid.read() {
-
+    for TileGridLoadEvent(grid, _, parent) in tile_grid.read() {
         commands.entity(*parent).with_children(|parent| {
+            // let polys = grid_to_polys(&grid.grid, 16.0);
+            // for p in polys {
+            //     let vertices = p
+            //         .exterior_coords_iter()
+            //         .map(|p| Vec2::new(p.x, p.y))
+            //         .collect::<Vec<_>>();
+            //     parent.spawn((
+            //         Name::new("Polygon Collider (Exterior)"),
+            //         Collider::polyline(vertices, None),
+            //         RigidBody::Static,
+            //         SpatialBundle::default(),
+            //     ));
+            //     for interior in p.interiors() {
+            //         let vertices = interior
+            //             .exterior_coords_iter()
+            //             .map(|p| Vec2::new(p.x, p.y))
+            //             .collect::<Vec<_>>();
+            //         parent.spawn((
+            //             Name::new("Polygon Collider (Interior)"),
+            //             Collider::polyline(vertices, None),
+            //             RigidBody::Static,
+            //             SpatialBundle::default(),
+            //         ));
+            //     }
+            // }
+
             for ([a, b, c], centroid) in grid.collider.iter().copied() {
                 // Spawn triangle
                 parent.spawn((

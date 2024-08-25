@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use std::ops::{Add, Mul, Sub};
-use avian2d::prelude::PhysicsSet;
+use avian2d::prelude::{Collider, PhysicsSet};
+use bevy::color::palettes::basic::RED;
 
 pub struct CameraPlugin;
 
@@ -10,7 +11,18 @@ impl Plugin for CameraPlugin {
             .register_type::<CameraTarget>()
             .add_systems(PostUpdate, follow_target
                 .after(PhysicsSet::Sync)
-                .before(TransformSystem::TransformPropagate));
+                .before(TransformSystem::TransformPropagate))
+            .add_systems(Update, polyline_gizmos);
+    }
+}
+
+fn polyline_gizmos(mut gizmos: Gizmos, q_poly: Query<&Collider>) {
+    for poly in q_poly.iter() {
+        if let Some(line) = poly.shape().as_polyline() {
+            for p in line.vertices() {
+                gizmos.circle_2d((*p).into(), 1.0, RED);
+            }
+        }
     }
 }
 

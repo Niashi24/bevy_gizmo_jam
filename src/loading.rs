@@ -52,9 +52,9 @@ pub struct TextureAssets {
 pub struct Levels {
     #[asset(path = "levels/main-level.png")]
     pub main_level: Handle<TileGridAsset>,
-    #[asset(
-        paths("levels/level-fall.png", "levels/level_fast.png", "levels/test_level.png", ),
-        collection(typed)
-    )]
-    pub level_map: Vec<Handle<TileGridAsset>>,
+    // #[asset(
+    //     paths("levels/level-fall.png", "levels/level_fast.png", "levels/test_level.png", ),
+    //     collection(typed)
+    // )]
+    // pub level_map: Vec<Handle<TileGridAsset>>,
 }
